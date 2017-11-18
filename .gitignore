@@ -1,0 +1,11 @@
+
+# Build directories
+*build*/
+
+# User-local configurations
+.vscode/
+CMakeLists.txt.user
+
+# Temporary files...
+*.swp
+
