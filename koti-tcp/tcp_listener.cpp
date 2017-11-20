@@ -154,12 +154,6 @@ listener::listener(
 		ignore_failure(ec, "listen");
 		return;
 	}
-
-	// If a connection handler was already provided, then start accepting.
-	if ( handler_ )
-	{
-		listen();
-	}
 }
 
 void
