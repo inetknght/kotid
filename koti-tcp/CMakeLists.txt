@@ -3,6 +3,7 @@ FILE(GLOB KOTI_TCP_SRC "*.cpp")
 FILE(GLOB KOTI_TCP_HDR "*.hpp")
 
 SET(KOTI_TCP_LIB_DEPENDENCIES
+	koti_options_lib
 	${Boost_LIBRARIES}
 )
 

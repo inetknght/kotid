@@ -8,100 +8,43 @@
 
 namespace koti {
 
-template<
-	typename header_only = void
->
-class httpd {
+class httpd
+{
 public:
-	using listener = koti::listener<>;
+	using listener = koti::listener;
 
 	httpd(
-		asio::io_service & ios,
-		ip::address listen_address,
-		port_number listen_port = 80
-	)
-		: ios_(ios)
-		, listen_address_(listen_address)
-		, listen_port_(listen_port)
-		, listener_(listener::make(
-			ios,
-			tcp::endpoint{listen_address,listen_port},
-			{},
-			{}
-		))
-	{
-		// Cannot tell listener_ to run():
-		// it needs a function object to call for new connections,
-		// but (*this) is not ready: this ptr is not complete.
-		// Therefore, we cannot yet handle callbacks.
-	}
+		asio::io_service & ios
+	);
 
-	operator bool() const
-	{
-		return false == error();
-	}
+	void
+	add_options(
+		koti::options & storage
+	);
 
-	bool error() const
-	{
-		return
-			(nullptr == listener_) ||
-			(listener_->last_error().first);
-	}
+	operator bool() const;
 
-	bool is_running() const 
-	{
-		return listener_;
-	}
+	bool
+	error() const;
 
-	void listen()
-	{
-		if ( (nullptr == listener_) || (listener_->last_error().first) )
-		{
-			listener_ = listener::make(
-				ios_,
-				tcp::endpoint{listen_address_,listen_port_},
-				{},
-				{}
-			);
-		}
+	bool
+	is_running() const;
 
-		listener_->set_connection_handler(
-			std::bind(
-				&httpd::on_new_connection,
-				this,
-				std::placeholders::_1
-			)
-		);
-		listener_->set_error_handler(
-			std::bind(
-				&httpd::on_listener_error,
-				this
-			)
-		);
+	void
+	listen();
 
-		listener_->run();
-	}
+	bool
+	listening() const;
 
 protected:
-	listener::error_handler_result on_listener_error()
-	{
-		std::cerr
-			<< "httpd listener error\t"
-			<< listener_->last_error().second
-			<< "\t" << listener_->last_error().first.message()
-			<< "\n";
-		return listener::error_handler_result::cancel_and_stop;
-	}
+	listener::error_handler_result
+	on_listener_error();
 
-	void on_new_connection(tcp::socket && socket)
-	{
-		tcp_connection::pointer connection = tcp_connection::upgrade(std::move(socket));
-		std::cout << connection->socket().remote_endpoint() << "\tconnected\n";
-	}
+	void
+	on_new_connection(tcp::socket && socket);
 
 	asio::io_service & ios_;
-	ip::address listen_address_;
-	port_number listen_port_;
+	listener::options listener_options_;
 	listener::pointer listener_;
 };
 

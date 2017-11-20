@@ -11,7 +11,7 @@ class tcp_listener_tests
 	: public testing::Test
 {
 public:
-	using listener = koti::listener<>;
+	using listener = koti::listener;
 
 	tcp_listener_tests() :
 		testing::Test()

@@ -20,18 +20,12 @@ namespace po = boost::program_options;
 namespace beast = boost::beast;
 
 #include "httpd.hpp"
+#include "options.hpp"
 
 namespace koti {
 
 class application final {
 public:
-	class options final {
-	public:
-		options(int argc = 0, char **argv = nullptr);
-
-		void assign(int argc, char **argv);
-	};
-
 	class exit_status {
 	public:
 		static exit_status success() {
@@ -76,14 +70,14 @@ protected:
 	options options_;
 
 public:
-	application(options options_ = {}) : options_(options_) {}
+	application(options::commandline_arguments options_ = {}) : options_(options_) {}
 
 	exit_status run();
 
 	asio::io_service ios_;
 	std::unique_ptr<asio::io_service::work> work_;
 
-	std::unique_ptr<httpd<>> http_server_;
+	std::unique_ptr<httpd> http_server_;
 };
 
 } // namespace koti

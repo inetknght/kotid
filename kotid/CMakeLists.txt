@@ -7,7 +7,8 @@ LIST(REMOVE_ITEM KOTID_SRC "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp")
 ADD_LIBRARY(kotid_lib STATIC ${KOTID_HDR} ${KOTID_SRC} )
 
 TARGET_LINK_LIBRARIES(kotid_lib
-    koti_httpd_lib
+	koti_options_lib
+	koti_httpd_lib
 	${Boost_LIBRARIES}
 	${ZLIB_LIBRARIES}
 	${BZIP2_LIBRARIES}
