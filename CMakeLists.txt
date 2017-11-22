@@ -1,4 +1,4 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.5)
 
 PROJECT(kotid CXX)
 
@@ -60,6 +60,8 @@ IF(ASAN_BUILD)
         SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
         SET(LINK_FLAGS "${LINK_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
 ENDIF()
+
+FIND_PACKAGE(Threads)
 
 ADD_SUBDIRECTORY(thirdparty)
 INCLUDE_DIRECTORIES(SYSTEM ${GTEST_INCLUDE_DIRS})

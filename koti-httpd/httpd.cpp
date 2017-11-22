@@ -4,6 +4,12 @@
 
 namespace koti {
 
+const std::string_view httpd::httpd_logger_name_ = {"httpd"};
+std::shared_ptr<spd::logger> httpd::logger_ = spd::stdout_color_mt({
+		httpd::httpd_logger_name_.begin(),
+		httpd::httpd_logger_name_.end()
+	});
+
 httpd::httpd(
 	asio::io_service & ios
 )
@@ -74,11 +80,12 @@ httpd::listen()
 listener::error_handler_result
 httpd::on_listener_error()
 {
-	std::cerr
-		<< "httpd listener error\t"
-		<< listener_->last_error().second
-		<< "\t" << listener_->last_error().first.message()
-		<< "\n";
+	logger_->error(
+		"listener error\t{}\t{}\t{}",
+		listener_->get_acceptor().local_endpoint(),
+		listener_->last_error().second,
+		listener_->last_error().first.message()
+	);
 	return listener::error_handler_result::cancel_and_stop;
 }
 
@@ -86,7 +93,7 @@ void
 httpd::on_new_connection(tcp::socket && socket)
 {
 	tcp_connection::pointer connection = tcp_connection::upgrade(std::move(socket));
-	std::cout << connection->socket().remote_endpoint() << "\tconnected\n";
+	logger_->info("{} connected", connection->socket().remote_endpoint().address());
 }
 
 } // namespace koti

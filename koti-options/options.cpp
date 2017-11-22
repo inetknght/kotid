@@ -1,5 +1,8 @@
 #include "options.hpp"
 
+#include "spdlog/spdlog.h"
+namespace spd = spdlog;
+
 #include <algorithm>
 #include <iostream>
 #include <vector>
@@ -168,6 +171,9 @@ options::parse_commandline()
 	}
 	catch (const std::exception & e)
 	{
+		auto console = spd::stdout_color_mt("console");
+		console->error(e.what());
+
 		std::cerr
 			<< e.what() << '\n'
 			<< '\n'

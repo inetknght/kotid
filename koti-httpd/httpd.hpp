@@ -1,5 +1,9 @@
 #pragma once
 
+#include "fmt/ostream.h"
+#include "spdlog/spdlog.h"
+namespace spd = spdlog;
+
 #include <cstddef>
 #include <cstdint>
 
@@ -46,6 +50,9 @@ protected:
 	asio::io_service & ios_;
 	listener::options listener_options_;
 	listener::pointer listener_;
+
+	static const std::string_view httpd_logger_name_;
+	static std::shared_ptr<spd::logger> logger_;
 };
 
 } // namespace koti
