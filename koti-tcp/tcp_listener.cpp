@@ -4,6 +4,12 @@
 
 namespace koti {
 
+const std::string_view listener::listener_logger_name_ = {"tcp_plexer"};
+std::shared_ptr<spd::logger> listener::logger_ = spd::stdout_color_mt({
+		listener::listener_logger_name_.begin(),
+		listener::listener_logger_name_.end()
+	});
+
 listener::options::options(
 	ip::address address,
 	port_number port
@@ -21,12 +27,14 @@ listener::options::validate_configuration(
 {
 	auto error = [&](const auto & e)
 	{
-		std::cerr
-			<< "exception caught:\n"
-			<< e.what() << "\n"
-			<< "when attempting to convert \"" << address_ << "\"\n"
-			<< "to an IP address.\n"
-			<< "Did you give a hostname instead?\n";
+		logger_->error(
+			"exception caught\t"
+			"when attempting to convert \"{}\" to an IP address\t"
+			"Did you give a hostname instead?\t"
+			"{}"
+			, address_
+			, e.what()
+		);
 		return validate::reject;
 	};
 
@@ -97,6 +105,7 @@ const port_number & listener::options::port() const
 tcp::endpoint
 listener::options::build() const
 {
+	logger_->info("listener binding to\t{}\t{}", address_, port_);
 	std::cout << address() << ":" << port() << std::endl;
 	return {address(), port()};
 }
@@ -265,6 +274,7 @@ listener::ignore_failure(
 	std::string msg
 )
 {
+	logger_->debug("ignoring failure instructions\t{}\t{}\t{}", ec.message(), msg);
 	[[maybe_unused]] auto result = fail(ec, msg);
 }
 
@@ -277,12 +287,19 @@ listener::fail(
 	last_ec_.first = ec;
 	last_ec_.second = std::move(msg);
 
+	error_handler_result result = error_handler_result::ignore;
+
+	// todo: defer logging until we have a result,
+	// try/catch around error_handler_
+	// if caught, log that too
+	logger_->error("{}\t{}", ec.message(), msg);
+
 	if ( error_handler_ )
 	{
-		return error_handler_();
+		result = error_handler_();
 	}
 
-	return error_handler_result::ignore;
+	return result;
 }
 
 } // namespace koti

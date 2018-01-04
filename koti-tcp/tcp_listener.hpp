@@ -1,5 +1,9 @@
 #pragma once
 
+#include "fmt/ostream.h"
+#include "spdlog/spdlog.h"
+namespace spd = spdlog;
+
 #include "tcp.hpp"
 
 #include <functional>
@@ -139,6 +143,9 @@ protected:
 	error_handler_f error_handler_;
 
 	error_descriptor last_ec_;
+
+	static const std::string_view listener_logger_name_;
+	static std::shared_ptr<spd::logger> logger_;
 };
 
 } // namespace koti

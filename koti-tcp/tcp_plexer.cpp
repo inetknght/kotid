@@ -1,17 +1,17 @@
-#include "httpd.hpp"
+#include "tcp_plexer.hpp"
 
 #include <iostream>
 #include <numeric>
 
 namespace koti {
 
-const std::string_view httpd::httpd_logger_name_ = {"httpd"};
-std::shared_ptr<spd::logger> httpd::logger_ = spd::stdout_color_mt({
-		httpd::httpd_logger_name_.begin(),
-		httpd::httpd_logger_name_.end()
+const std::string_view tcp_plexer::tcp_plexer_logger_name_ = {"tcp_plexer"};
+std::shared_ptr<spd::logger> tcp_plexer::logger_ = spd::stdout_color_mt({
+		tcp_plexer::tcp_plexer_logger_name_.begin(),
+		tcp_plexer::tcp_plexer_logger_name_.end()
 	});
 
-httpd::httpd(
+tcp_plexer::tcp_plexer(
 	asio::io_service & ios
 )
 	: ios_(ios)
@@ -19,20 +19,20 @@ httpd::httpd(
 }
 
 void
-httpd::add_options(
+tcp_plexer::add_options(
 	koti::options & storage
 )
 {
 	listener_options_.add_options(storage);
 }
 
-httpd::operator bool() const
+tcp_plexer::operator bool() const
 {
 	return false == error();
 }
 
 bool
-httpd::error() const
+tcp_plexer::error() const
 {
 	return
 		(nullptr == listener_) ||
@@ -40,13 +40,13 @@ httpd::error() const
 }
 
 bool
-httpd::is_running() const 
+tcp_plexer::is_running() const 
 {
 	return nullptr != listener_.get();
 }
 
 void
-httpd::listen()
+tcp_plexer::listen()
 {
 	if ( (nullptr == listener_) ||
 		 (listener_->last_error().first) ||
@@ -62,7 +62,7 @@ httpd::listen()
 
 	listener_->set_connection_handler(
 		std::bind(
-			&httpd::on_new_connection,
+			&tcp_plexer::on_new_connection,
 			this,
 			std::placeholders::_1
 		)
@@ -70,7 +70,7 @@ httpd::listen()
 
 	listener_->set_error_handler(
 		std::bind(
-			&httpd::on_listener_error,
+			&tcp_plexer::on_listener_error,
 			this
 		)
 	);
@@ -79,13 +79,13 @@ httpd::listen()
 }
 
 bool
-httpd::listening() const
+tcp_plexer::listening() const
 {
 	return (listener_) && (listener_->listening());
 }
 
 void
-httpd::set_maximum_connections(size_t new_maximum)
+tcp_plexer::set_maximum_connections(size_t new_maximum)
 {
 	// prefer to keep non-null (active) connections
 	std::sort(std::begin(connections_),std::end(connections_));
@@ -93,7 +93,7 @@ httpd::set_maximum_connections(size_t new_maximum)
 }
 
 size_t
-httpd::active_connection_count() const
+tcp_plexer::active_connection_count() const
 {
 	return std::accumulate(
 		std::begin(connections_),
@@ -106,13 +106,13 @@ httpd::active_connection_count() const
 }
 
 size_t
-httpd::maximum_connection_count() const
+tcp_plexer::maximum_connection_count() const
 {
 	return connections_.size();
 }
 
 listener::error_handler_result
-httpd::on_listener_error()
+tcp_plexer::on_listener_error()
 {
 	logger_->error(
 		"listener error\t{}\t{}\t{}",
@@ -124,13 +124,17 @@ httpd::on_listener_error()
 }
 
 void
-httpd::on_new_connection(tcp::socket && socket)
+tcp_plexer::on_new_connection(tcp::socket && socket)
 {
-	tcp_connection::pointer connection = tcp_connection::upgrade(
-		std::move(socket),
-		{}
-	);
+	tcp_connection::pointer connection = tcp_connection::upgrade(std::move(socket));
 	logger_->info("{} connected", connection->socket().remote_endpoint().address());
+}
+
+void
+tcp_plexer::on_connection_closed(tcp_connection::pointer & connection)
+{
+	logger_->info("{} disconnected", connection->socket().remote_endpoint().address());
+	connection.reset();
 }
 
 } // namespace koti

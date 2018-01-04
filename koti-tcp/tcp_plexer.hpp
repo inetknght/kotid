@@ -8,16 +8,17 @@ namespace spd = spdlog;
 #include <cstdint>
 #include <vector>
 
-#include "tcp_plexer.hpp"
+#include "tcp_listener.hpp"
+#include "tcp_connection.hpp"
 
 namespace koti {
 
-class httpd
+class tcp_plexer
 {
 public:
 	using listener = koti::listener;
 
-	httpd(
+	tcp_plexer(
 		asio::io_service & ios
 	);
 
@@ -57,10 +58,7 @@ protected:
 	on_new_connection(tcp::socket && socket);
 
 	void
-	on_new_http_connection(tcp_connection & pointer);
-
-	void
-	on_connection_closed(tcp_connection & pointer);
+	on_connection_closed(tcp_connection::pointer & connection);
 
 	asio::io_service & ios_;
 	listener::options listener_options_;
@@ -68,7 +66,7 @@ protected:
 
 	std::vector<tcp_connection::pointer> connections_;
 
-	static const std::string_view httpd_logger_name_;
+	static const std::string_view tcp_plexer_logger_name_;
 	static std::shared_ptr<spd::logger> logger_;
 };
 
