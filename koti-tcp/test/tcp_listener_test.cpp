@@ -7,14 +7,36 @@
 
 namespace koti {
 
-class tcp_listener_tests
-	: public testing::Test
+template <class tcp_listener_tests>
+class tcp_listener_test_handlers
+	: public listener_handler<>
 {
 public:
-	using listener = koti::listener;
+	template <class tcp_listener_tests_type>
+	void
+	on_new_connection(typename tcp_listener_tests_type::listener_type::socket_type && socket)
+	{
+		return static_cast<tcp_listener_tests_type*>(this)->on_new_connection(socket);
+	}
 
-	tcp_listener_tests() :
-		testing::Test()
+	template <class tcp_listener_tests_type>
+	typename tcp_listener_tests_type::listener_type::error_handler_result
+	on_listener_error()
+	{
+		return static_cast<tcp_listener_tests*>(this)->on_listener_error();
+	}
+};
+
+class tcp_listener_tests
+	: public testing::Test
+	, public tcp_listener_test_handlers<tcp_listener_tests>
+{
+public:
+	using listener_type = koti::listener<>;
+
+	tcp_listener_tests(
+	)
+		: testing::Test()
 	{
 	}
 
@@ -22,20 +44,12 @@ public:
 	{
 	}
 
-	listener::pointer & remake()
+	typename listener_type::pointer & remake()
 	{
 		return
-			listener_ = listener::make(
+			listener_ = listener_type::make(
 				ios_,
-				koti::tcp::endpoint{address, port},
-				connection_handler_ = [&](koti::tcp::socket && socket)
-				{
-					return on_new_connection(std::move(socket));
-				},
-				error_handler_ = [&]()
-				{
-					return on_listener_error();
-				}
+				koti::tcp::endpoint{listener_options_.address(), listener_options_.port()}
 			);
 	}
 
@@ -45,25 +59,23 @@ public:
 		accepted_sockets_.push_back(std::move(socket));
 	}
 
-	listener::error_handler_result
+	typename listener_type::error_handler_result
 	on_listener_error()
 	{
-		return listener::error_handler_result::cancel_and_stop;
+		return listener_type::error_handler_result::cancel_and_stop;
 	}
 
 	asio::io_service ios_;
-	listener::pointer listener_;
-
-	koti::ip::address address;
-	koti::port_number port = 0u;
-	listener::connection_handler_f connection_handler_;
-	listener::error_handler_f error_handler_;
+	typename listener_type::pointer listener_;
+	typename listener_type::options listener_options_;
 
 	std::vector<koti::tcp::socket> accepted_sockets_;
 };
 
 TEST_F(tcp_listener_tests, ctor_dtor)
 {
+	
+
 	remake();
 }
 

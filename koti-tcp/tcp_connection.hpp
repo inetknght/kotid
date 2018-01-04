@@ -7,11 +7,13 @@
 
 namespace koti {
 
-class tcp_connection
-{
+template <class,class>
+class connection;
+
+template <class socket>
+class connection_handler {
 public:
-	using pointer = std::unique_ptr<tcp_connection>;
-	using socket_ptr = std::unique_ptr<tcp::socket>;
+	using socket_type = socket;
 
 	enum class [[nodiscard]] action {
 		disconnect,
@@ -19,57 +21,115 @@ public:
 		normal
 	};
 
-	using connected_f = std::function<action(void)>;
-	using error_f = std::function<action(const boost::system::error_code &)>;
-	using disconnected_f = std::function<void(tcp_connection::pointer &)>;
+	action
+	on_connected();
 
-	struct handler_functions
+	action
+	on_error(const boost::system::error_code &);
+
+	action
+	on_disconnect();
+};
+
+template <class socket>
+class null_connection_handler
+	: public connection_handler<socket>
+{
+public:
+	using socket_type = typename connection_handler<socket>::socket_type;
+	using action = typename connection_handler<socket>::action;
+
+	action
+	on_connected(void)
 	{
-		connected_f connected_;
-		error_f error_;
-		disconnected_f disconnected_;
-	};
+		return action::disconnect;
+	}
 
-	tcp_connection(
-		asio::io_service & ios,
-		const handler_functions & handlers
-	);
+	action
+	on_error(const boost::system::error_code &)
+	{
+		return action::abort;
+	}
 
-	tcp_connection(
-		tcp::socket && socket,
-		const handler_functions & handlers
-	);
+	action
+	on_disconnect()
+	{
+		return action::normal;
+	}
+};
 
-	tcp_connection(
-		std::unique_ptr<tcp::socket> && socket,
-		const handler_functions & handlers
-	);
+template <
+	class socket = tcp::socket,
+	class connection_handler = null_connection_handler<socket>
+>
+class connection
+	: virtual public koti::inheritable_shared_from_this
+	, private socket
+{
+public:
+	using this_type = connection;
+	using pointer = std::shared_ptr<this_type>;
+
+	using action = typename connection_handler::action;
+
+	connection(
+		asio::io_service & ios
+	)
+		: socket(ios)
+	{
+	}
+
+	connection(
+		socket && s
+	)
+		: socket(std::move(s))
+	{
+	}
+
+	connection(
+		std::unique_ptr<socket> && s
+	)
+		: socket(std::move(*s))
+	{
+		s.release();
+	}
+
+	connection(const connection & copy_ctor) = delete;
+	connection(connection && move_ctor) = default;
+	connection & operator=(const connection & copy_assign) = delete;
+	connection & operator=(connection && move_assign) = default;
 
 	// create a new, unconnected, tcp_connection
 	static pointer make(
-		asio::io_service & ios,
-		const handler_functions & handlers
-	);
+		asio::io_service & ios
+	)
+	{
+		return std::make_unique<this_type>(
+			ios
+		);
+	}
 
-	static pointer upgrade(
-		tcp::socket && socket,
-		const handler_functions & handlers
-	);
+	socket & get_socket()
+	{
+		return static_cast<socket &>(*this);
+	}
 
-	// upgrade from unique ASIO TCP socket
-	static pointer upgrade(
-		std::unique_ptr<tcp::socket> && socket,
-		const handler_functions & handlers
-	);
-
-	tcp::socket & socket();
-
-	const tcp::socket & socket() const;
+	const socket & get_socket() const
+	{
+		return static_cast<const socket &>(*this);
+	}
 
 protected:
+	connection_handler & get_connection_handler()
+	{
+		return static_cast<connection_handler &>(*this);
+	}
 
-	socket_ptr socket_;
-	handler_functions handlers_;
+	const connection_handler & get_connection_handler() const
+	{
+		return static_cast<const connection_handler &>(*this);
+	}
+
 };
 
 } // namespace koti

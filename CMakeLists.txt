@@ -70,7 +70,7 @@ INCLUDE_DIRECTORIES(SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/beast)
 
 SET(CMAKE_CXX_STANDARD 17)
 SET(CMAKE_CXX_STANDARD_REQUIRED 17)
-SET(CMAKE_CXX_FLAGS " ${CMAKE_CXX_FLAGS} -Wall -Wextra -Werror=return-type -Werror=shift-count-overflow -Werror=shift-negative-value -Werror=shift-overflow -Wno-long-long -pedantic -Wno-unused-function -Wno-vla -Wswitch-enum -march=native -mtune=native")
+SET(CMAKE_CXX_FLAGS " ${CMAKE_CXX_FLAGS} -Wall -Wextra -Werror=return-type -Werror=shift-count-overflow -Werror=shift-negative-value -Werror=shift-overflow -Wno-long-long -pedantic -Wno-unused-function -Wno-vla -march=native -mtune=native")
 
 # Find and set up zlib (anything using zlib needs to TARGET_LINK_LIBRARIES(target ${ZLIB_LIRARIES})
 FIND_PACKAGE(ZLIB)
