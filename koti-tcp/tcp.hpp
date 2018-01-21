@@ -27,4 +27,22 @@ protected:
 	}
 };
 
+template <typename T, typename ... Args>
+auto protected_make_shared_enabler(Args && ... args) -> typename T::pointer
+{
+	struct private_make_shared_enabler : public T
+	{
+		private_make_shared_enabler(Args && ... args)
+			: T(std::forward<Args>(args)...)
+		{
+		}
+	};
+
+	return std::make_shared<
+		private_make_shared_enabler
+	>(
+		std::forward<Args>(args)...
+	);
+}
+
 } // namespace koti

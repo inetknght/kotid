@@ -1,75 +1,200 @@
-#pragma once
+//#pragma once
 
-#include "fmt/ostream.h"
-#include "spdlog/spdlog.h"
-namespace spd = spdlog;
+//#include "fmt/ostream.h"
+//#include "spdlog/spdlog.h"
+//namespace spd = spdlog;
 
-#include <cstddef>
-#include <cstdint>
-#include <vector>
+//#include <cstddef>
+//#include <cstdint>
+//#include <vector>
 
-#include "tcp_plexer.hpp"
+//#include "tcp_plexer.hpp"
 
-namespace koti {
+//namespace koti {
 
-class httpd
-{
-public:
-	using listener = koti::listener;
+//class httpd_logs {
+//protected:
+//	using logging_pointer = std::shared_ptr<spd::logger>;
 
-	httpd(
-		asio::io_service & ios
-	);
+//	static const std::string_view & logger_name()
+//	{
+//		static const std::string_view
+//		logger_name{"httpd"};
+//		return logger_name;
+//	}
 
-	void
-	add_options(
-		koti::options & storage
-	);
+//	static logging_pointer & logger()
+//	{
+//		static logging_pointer
+//		logger{spd::stdout_color_mt({
+//				logger_name().begin(),
+//				logger_name().end()
+//			})};
+	
+//		return logger;
+//	}
+//};
 
-	operator bool() const;
+//template <
+//	class socket = tcp::socket,
+//	class acceptor = tcp::acceptor
+//>
+//class httpd_handler
+//{
+//};
 
-	bool
-	error() const;
+//template <
+//	class socket = tcp::socket,
+//	class acceptor = tcp::acceptor,
+//	class connection_handler = connection_handler<socket>,
+//	class listener_handler = listener_handler<socket, acceptor>,
+//	class plexer = koti::plexer<socket, acceptor, connection_handler, >
+//>
+//class httpd
+//	: public plexer
+//{
+//public:
+//	using socket_type = socket;
+//	using acceptor_type = acceptor;
+//	using plexer_type = plexer;
 
-	bool
-	is_running() const;
+//	httpd(
+//		asio::io_service & ios
+//	)
+//		: plexer_type(ios)
+//		, ios_(ios)
+//	{
+//	}
 
-	void
-	listen();
+//	void
+//	add_options(
+//		koti::options & storage
+//	)
+//	{
+//		listener_options_.add_options(storage);
+//	}
 
-	bool
-	listening() const;
+//	operator bool() const
+//	{
+//		return false == error();
+//	}
 
-	void
-	set_maximum_connections(size_t new_maximum);
+//	bool
+//	error() const
+//	{
+//		return
+//			(nullptr == listener_) ||
+//			(listener_->last_error().first);
+//	}
 
-	size_t
-	active_connection_count() const;
+//	bool
+//	is_running() const
+//	{
+//		return nullptr != listener_.get();
+//	}
 
-	size_t
-	maximum_connection_count() const;
+//	void
+//	listen()
+//	{
+//		if ( (nullptr == listener_) ||
+//			 (listener_->last_error().first) ||
+//			 (false == listener_->listening()) )
+//		{
+//			listener_ = listener::make(
+//				ios_,
+//				tcp::endpoint{listener_options_.build()},
+//				{},
+//				{}
+//			);
+//		}
+	
+//		listener_->set_connection_handler(
+//			std::bind(
+//				&httpd::on_new_connection,
+//				this,
+//				std::placeholders::_1
+//			)
+//		);
+	
+//		listener_->set_error_handler(
+//			std::bind(
+//				&httpd::on_listener_error,
+//				this
+//			)
+//		);
+	
+//		listener_->listen();
+//	}
 
-protected:
-	listener::error_handler_result
-	on_listener_error();
+//	bool
+//	listening() const
+//	{
+//		return (listener_) && (listener_->listening());
+//	}
 
-	void
-	on_new_connection(tcp::socket && socket);
+//	void
+//	set_maximum_connections(size_t new_maximum)
+//	{
+//		// prefer to keep non-null (active) connections
+//		std::sort(std::begin(connections_),std::end(connections_));
+//		connections_.resize(new_maximum);
+//	}
 
-	void
-	on_new_http_connection(tcp_connection & pointer);
+//	size_t
+//	active_connection_count() const
+//	{
+//		return std::accumulate(
+//			std::begin(connections_),
+//			std::end(connections_),
+//			0u,
+//			[](size_t count, const tcp_connection::pointer & ptr)
+//		{
+//			return count + (bool)ptr;
+//		});
+//	}
 
-	void
-	on_connection_closed(tcp_connection & pointer);
+//	size_t
+//	maximum_connection_count() const
+//	{
+//		return connections_.size();
+//	}
 
-	asio::io_service & ios_;
-	listener::options listener_options_;
-	listener::pointer listener_;
+//protected:
+//	listener::error_handler_result
+//	on_listener_error()
+//	{
+//		logger_->error(
+//			"listener error\t{}\t{}\t{}",
+//			listener_->get_acceptor().local_endpoint(),
+//			listener_->last_error().second,
+//			listener_->last_error().first.message()
+//		);
+//		return listener::error_handler_result::cancel_and_stop;
+//	}
 
-	std::vector<tcp_connection::pointer> connections_;
+//	void
+//	on_new_connection(tcp::socket && socket)
+//	{
+//		tcp_connection::pointer connection = tcp_connection::upgrade(
+//			std::move(socket),
+//			{}
+//		);
+//		logger_->info("{} connected", connection->socket().remote_endpoint().address());
+//	}
 
-	static const std::string_view httpd_logger_name_;
-	static std::shared_ptr<spd::logger> logger_;
-};
+//	void
+//	on_new_http_connection(tcp_connection & pointer);
 
-} // namespace koti
+//	void
+//	on_connection_closed(tcp_connection & pointer);
+
+//	asio::io_service & ios_;
+//	listener::options listener_options_;
+
+//	std::vector<tcp_connection::pointer> connections_;
+
+//	static const std::string_view httpd_logger_name_;
+//	static std::shared_ptr<spd::logger> logger_;
+//};
+
+//} // namespace koti

@@ -77,7 +77,7 @@ public:
 	asio::io_service ios_;
 	std::unique_ptr<asio::io_service::work> work_;
 
-	std::unique_ptr<httpd> http_server_;
+//	std::unique_ptr<httpd> http_server_;
 };
 
 } // namespace koti

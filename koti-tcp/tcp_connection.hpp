@@ -7,14 +7,11 @@
 
 namespace koti {
 
-template <class,class>
+template <class>
 class connection;
 
-template <class socket>
 class connection_handler {
 public:
-	using socket_type = socket;
-
 	enum class [[nodiscard]] action {
 		disconnect,
 		abort,
@@ -22,7 +19,13 @@ public:
 	};
 
 	action
-	on_connected();
+	on_connected(const boost::system::error_code &);
+
+	action
+	on_write_complete(const boost::system::error_code &, std::size_t);
+
+	action
+	on_read_complete(const boost::system::error_code & ec, std::size_t transferred);
 
 	action
 	on_error(const boost::system::error_code &);
@@ -31,18 +34,28 @@ public:
 	on_disconnect();
 };
 
-template <class socket>
 class null_connection_handler
-	: public connection_handler<socket>
+	: public connection_handler
 {
 public:
-	using socket_type = typename connection_handler<socket>::socket_type;
-	using action = typename connection_handler<socket>::action;
+	using action = typename connection_handler::action;
 
 	action
-	on_connected(void)
+	on_connected(const boost::system::error_code &)
 	{
 		return action::disconnect;
+	}
+
+	action
+	on_write_complete(const boost::system::error_code &, std::size_t)
+	{
+		return action::normal;
+	}
+
+	action
+	on_read_complete(const boost::system::error_code &, std::size_t)
+	{
+		return action::normal;
 	}
 
 	action
@@ -59,77 +72,135 @@ public:
 };
 
 template <
-	class socket = tcp::socket,
-	class connection_handler = null_connection_handler<socket>
+	class connection_handler = null_connection_handler
 >
 class connection
 	: virtual public koti::inheritable_shared_from_this
-	, private socket
+	, private tcp::socket
+	, public connection_handler
 {
 public:
 	using this_type = connection;
+	using socket_type = tcp::socket;
+	using connection_handler_type = connection_handler;
+	using error_code = boost::system::error_code;
+
 	using pointer = std::shared_ptr<this_type>;
 
-	using action = typename connection_handler::action;
-
-	connection(
-		asio::io_service & ios
-	)
-		: socket(ios)
-	{
-	}
-
-	connection(
-		socket && s
-	)
-		: socket(std::move(s))
-	{
-	}
-
-	connection(
-		std::unique_ptr<socket> && s
-	)
-		: socket(std::move(*s))
-	{
-		s.release();
-	}
+	using action = typename connection_handler_type::action;
 
 	connection(const connection & copy_ctor) = delete;
 	connection(connection && move_ctor) = default;
 	connection & operator=(const connection & copy_assign) = delete;
 	connection & operator=(connection && move_assign) = default;
 
-	// create a new, unconnected, tcp_connection
 	static pointer make(
 		asio::io_service & ios
 	)
 	{
-		return std::make_unique<this_type>(
+		return protected_make_shared_enabler<this_type>(
 			ios
 		);
 	}
 
-	socket & get_socket()
+	static pointer make(
+		tcp::socket && s
+	)
 	{
-		return static_cast<socket &>(*this);
+		return protected_make_shared_enabler<this_type>(
+			std::move(s)
+		);
 	}
 
-	const socket & get_socket() const
+	tcp::socket & as_socket()
 	{
-		return static_cast<const socket &>(*this);
+		return static_cast<tcp::socket&>(*this);
 	}
+
+	const tcp::socket & as_socket() const
+	{
+		return static_cast<const tcp::socket&>(*this);
+	}
+
+	using socket_type::get_io_service;
+	using socket_type::get_option;
+	using socket_type::local_endpoint;
+	using socket_type::remote_endpoint;
+
+	using socket_type::open;
+	using socket_type::bind;
+
+	//using socket_type::async_connect;
+	template <class ... Args>
+	auto async_connect(
+		Args && ... args
+	)
+	{
+		return socket_type::async_connect(
+			std::forward<Args>(args)...,
+			[&](const error_code & ec)
+		{
+			return static_cast<connection_handler_type&>(*this).on_connected(
+				ec
+			);
+		});
+	}
+
+	//using socket_type::async_write_some;
+	template <class ... Args>
+	auto async_write_some(
+		Args && ... args
+	)
+	{
+		return socket_type::async_write_some(
+			std::forward<Args>(args)...,
+			[&](const error_code & ec, std::size_t transferred)
+		{
+			return static_cast<connection_handler_type&>(*this).on_write_complete(
+				ec,
+				transferred
+			);
+		});
+	}
+
+	//using socket_type::async_read_some;
+	template <class ... Args>
+	auto async_read_some(
+		Args && ... args
+	)
+	{
+		return socket_type::async_read_some(
+			asio::buffer(read_buffer()),
+			std::forward<Args>(args)...,
+			[&](const error_code & ec, std::size_t transferred)
+		{
+			return static_cast<connection_handler_type&>(*this).on_read_complete(
+				ec,
+				transferred
+			);
+		});
+	}
+
+	using socket_type::shutdown;
+
+	using socket_type::cancel;
+	using socket_type::close;
+
+	using read_buffer_type = std::vector<char>;
+	read_buffer_type & read_buffer() { return read_buffer_; }
+	const read_buffer_type & read_buffer() const { return read_buffer_; }
 
 protected:
-	connection_handler & get_connection_handler()
-	{
-		return static_cast<connection_handler &>(*this);
-	}
+	read_buffer_type read_buffer_;
 
-	const connection_handler & get_connection_handler() const
+	template <class ... Args>
+	connection(
+		Args && ... args
+	)
+		: koti::inheritable_shared_from_this()
+		, socket_type(std::forward<Args...>(args...))
 	{
-		return static_cast<const connection_handler &>(*this);
 	}
-
 };
 
 } // namespace koti
