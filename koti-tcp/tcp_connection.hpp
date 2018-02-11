@@ -71,6 +71,90 @@ public:
 	}
 };
 
+class buffered_read_connection_handler
+{
+public:
+	using action = typename null_connection_handler::action;
+	using buffer_type = std::vector<char>;
+
+	buffer_type &
+	read_buffer()
+	{
+		return read_buffer_;
+	}
+
+	const buffer_type &
+	read_buffer() const
+	{
+		return read_buffer_;
+	}
+
+	std::size_t &
+	last_read_size()
+	{
+		return completed_read_length_;
+	}
+
+	const std::size_t &
+	last_read_size() const
+	{
+		return completed_read_length_;
+	}
+
+	action
+	on_read_complete(const boost::system::error_code &, std::size_t transferred)
+	{
+		completed_read_length_ = transferred;
+		return action::normal;
+	}
+
+protected:
+	std::vector<char> read_buffer_;
+	std::size_t completed_read_length_ = 0;
+};
+
+class buffered_write_connection_handler
+{
+public:
+	using action = typename null_connection_handler::action;
+	using buffer_type = std::vector<char>;
+
+	buffer_type &
+	write_buffer()
+	{
+		return write_buffer_;
+	}
+
+	const buffer_type &
+	write_buffer() const
+	{
+		return write_buffer_;
+	}
+
+	std::size_t &
+	last_write_size()
+	{
+		return completed_write_length_;
+	}
+
+	const std::size_t &
+	last_write_size() const
+	{
+		return completed_write_length_;
+	}
+
+	action
+	on_write_complete(const boost::system::error_code &, std::size_t transferred)
+	{
+		completed_write_length_ = transferred;
+		return action::normal;
+	}
+
+protected:
+	std::vector<char> write_buffer_;
+	std::size_t completed_write_length_ = 0;
+};
+
 template <
 	class connection_handler = null_connection_handler
 >

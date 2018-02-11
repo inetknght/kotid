@@ -2,6 +2,14 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.5)
 
 PROJECT(kotid CXX)
 
+IF (COMMAND cmake_policy)
+	# Be more explicit about link library search paths
+	cmake_policy(SET CMP0003 NEW)
+
+	# IN_LIST operator support
+	cmake_policy(SET CMP0057 NEW)
+ENDIF()
+
 # If CMAKE_BUILD_TYPE is not configured, then set to default
 # {None,Debug,RelWithDebInfo,Release,MinSizeRel}
 IF (NOT CMAKE_BUILD_TYPE)
@@ -38,11 +46,6 @@ set(CPACK_PACKAGE_RELOCATABLE ON)
 set(CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
 set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CPACK_PACKAGE_RELEASE}.${CMAKE_SYSTEM_PROCESSOR}")
 include(CPack)
-
-IF (COMMAND cmake_policy)
-	# Be more explicit about link library search paths
-	cmake_policy(SET CMP0003 NEW)
-ENDIF()
 
 # Find Boost for subprojects
 SET(Boost_USE_STATIC_LIBS ON)

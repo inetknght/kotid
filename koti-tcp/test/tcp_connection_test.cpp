@@ -7,6 +7,8 @@ namespace koti {
 
 class tcp_connection_test_handler
 	: public null_connection_handler
+	, public buffered_read_connection_handler
+	, public buffered_write_connection_handler
 {
 public:
 	using action = typename connection_handler::action;
@@ -16,9 +18,7 @@ public:
 	boost::system::error_code last_error_;
 	bool had_disconnected_ = false;
 	bool had_write_complete_ = false;
-	std::size_t last_write_size_ = 0;
 	bool had_read_complete_ = false;
-	std::size_t last_read_size_ = 0;
 
 	action
 	on_connected(const boost::system::error_code & ec)
@@ -32,26 +32,16 @@ public:
 	on_write_complete(const boost::system::error_code & ec, std::size_t transferred)
 	{
 		had_write_complete_ = true;
-		last_write_size_ = transferred;
 		last_error_ = ec;
-		return null_connection_handler::on_write_complete(ec, transferred);
+		return buffered_write_connection_handler::on_write_complete(ec, transferred);
 	}
 
 	action
 	on_read_complete(const boost::system::error_code & ec, std::size_t transferred)
 	{
 		had_read_complete_ = true;
-		last_read_size_ = transferred;
 		last_error_ = ec;
-		return null_connection_handler::on_read_complete(ec, transferred);
-	}
-
-	action
-	on_error(const boost::system::error_code & ec)
-	{
-		had_error_ = true;
-		last_error_ = ec;
-		return null_connection_handler::on_error(ec);
+		return buffered_read_connection_handler::on_read_complete(ec, transferred);
 	}
 
 	action
@@ -189,15 +179,17 @@ TEST_F(tcp_connection_tests, connect_async_send_receive)
 	EXPECT_TRUE(a->had_read_complete_);
 	EXPECT_EQ(a->last_error_, boost::system::error_code());
 	EXPECT_EQ(a->last_error_.message(), boost::system::error_code().message());
-	EXPECT_EQ(a->last_read_size_, 0);
+	EXPECT_EQ(a->last_read_size(), 0u);
 
 	EXPECT_TRUE(b->had_write_complete_);
 	EXPECT_EQ(b->last_error_, boost::system::error_code());
 	EXPECT_EQ(b->last_error_.message(), boost::system::error_code().message());
-	EXPECT_EQ(b->last_write_size_, 1+strlen("foobar"));
+	EXPECT_EQ(b->last_write_size(), 1+strlen("foobar"));
 
 	a->had_read_complete_ = false;
 	a->last_error_ = boost::system::error_code();
+	b->had_write_complete_ = false;
+	b->last_error_ = boost::system::error_code();
 
 	a->read_buffer().resize(1024);
 	EXPECT_NO_THROW(a->async_read_some());
@@ -208,8 +200,14 @@ TEST_F(tcp_connection_tests, connect_async_send_receive)
 	EXPECT_TRUE(a->had_read_complete_);
 	EXPECT_EQ(a->last_error_, boost::system::error_code());
 	EXPECT_EQ(a->last_error_.message(), boost::system::error_code().message());
-	EXPECT_EQ(a->last_read_size_, 1+strlen("foobar"));
-	EXPECT_EQ(a->read_buffer().size(), 1024);
+	EXPECT_EQ(a->last_read_size(), 1+strlen("foobar"));
+	EXPECT_EQ(a->read_buffer().size(), 1024u);
+
+	EXPECT_NO_THROW(a->close());
+	EXPECT_NO_THROW(b->close());
+
+	ios_.run();
+	ios_.reset();
 }
 
 } // namespace koti
