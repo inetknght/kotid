@@ -36,8 +36,7 @@ private:
 test_clock::time_point test_clock::now_ = clock::now();
 
 class tcp_connection_test_handler
-	: public null_connection_handler
-	, public buffered_read_connection_handler
+	: public buffered_read_connection_handler
 	, public buffered_write_connection_handler
 	, public connection_timer_handler<test_clock>
 {
@@ -56,7 +55,7 @@ public:
 	{
 		had_connected_ = true;
 		last_error_ = ec;
-		return null_connection_handler::on_connected(ec);
+		return connection_timer_handler::on_connected(ec);
 	}
 
 	action
@@ -79,7 +78,7 @@ public:
 	on_disconnect()
 	{
 		had_disconnected_ = true;
-		return null_connection_handler::on_disconnect();
+		return action::normal;
 	}
 };
 
@@ -150,7 +149,7 @@ TEST_F(tcp_connection_tests, connect_async_send_receive)
 		a->as_socket(),
 		[&](const boost::system::error_code & ec)->void
 		{
-			EXPECT_EQ(a->on_connected(ec), null_connection_handler::action::disconnect );
+			EXPECT_EQ(a->on_connected(ec), connection_handler::action::normal);
 		}));
 
 	EXPECT_NO_THROW(b->async_connect(acceptor->local_endpoint()));
@@ -186,7 +185,7 @@ TEST_F(tcp_connection_tests, connect_async_send_receive)
 		a->as_socket(),
 		[&](const boost::system::error_code & ec)->void
 		{
-			EXPECT_EQ(a->on_connected(ec), null_connection_handler::action::disconnect );
+			EXPECT_EQ(a->on_connected(ec), connection_handler::action::normal);
 		}));
 
 	EXPECT_NO_THROW(b->async_connect(acceptor->local_endpoint()));

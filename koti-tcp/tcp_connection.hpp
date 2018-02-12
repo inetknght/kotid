@@ -186,7 +186,7 @@ public:
 	}
 
 private:
-	time_point connection_time_ = timer_source::now();
+	time_point connection_time_;
 };
 
 template <
