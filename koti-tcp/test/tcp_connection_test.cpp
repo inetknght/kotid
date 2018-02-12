@@ -5,10 +5,41 @@
 
 namespace koti {
 
+class tcp_connection_test_handler;
+class test_clock
+{
+	friend class tcp_connection_test_handler;
+public:
+	using clock = std::chrono::steady_clock;
+	using time_point = typename clock::time_point;
+	using time_duration = typename time_point::duration;
+
+	static time_point now()
+	{
+		return now_;
+	}
+
+	static time_point & set_now()
+	{
+		return set_now(clock::now());
+	}
+
+	static time_point & set_now(time_point and_now)
+	{
+		return now_ = and_now;
+	}
+
+private:
+	static time_point now_;
+};
+
+test_clock::time_point test_clock::now_ = clock::now();
+
 class tcp_connection_test_handler
 	: public null_connection_handler
 	, public buffered_read_connection_handler
 	, public buffered_write_connection_handler
+	, public connection_timer_handler<test_clock>
 {
 public:
 	using action = typename connection_handler::action;
@@ -137,6 +168,7 @@ TEST_F(tcp_connection_tests, connect_async_send_receive)
 	EXPECT_EQ(b->last_error_, boost::asio::error::connection_aborted);
 	EXPECT_EQ(b->last_error_.message(), boost::system::error_code(boost::asio::error::connection_aborted).message());
 
+	auto connectedish = test_clock::set_now(test_clock::now());
 	b->last_error_ = {};
 	b->had_connected_ = false;
 	a->last_error_ = {};
@@ -161,6 +193,13 @@ TEST_F(tcp_connection_tests, connect_async_send_receive)
 
 	ios_.run();
 	ios_.reset();
+
+	auto nowish = test_clock::set_now(connectedish + std::chrono::seconds(10));
+	ASSERT_LT(connectedish, nowish);
+	EXPECT_EQ(connectedish, a->connection_time());
+	EXPECT_EQ(connectedish, b->connection_time());
+	EXPECT_EQ(a->connection_duration(), (nowish - connectedish));
+	EXPECT_EQ(b->connection_duration(), (nowish - connectedish));
 
 	EXPECT_TRUE(a->had_connected_);
 	EXPECT_EQ(a->last_error_, boost::system::error_code());

@@ -2,6 +2,7 @@
 
 #include "tcp.hpp"
 
+#include <chrono>
 #include <functional>
 #include <stdexcept>
 
@@ -153,6 +154,39 @@ public:
 protected:
 	std::vector<char> write_buffer_;
 	std::size_t completed_write_length_ = 0;
+};
+
+template <class TimerSource = std::chrono::steady_clock>
+class connection_timer_handler
+: private TimerSource
+{
+public:
+	using action = typename null_connection_handler::action;
+	using timer_source = TimerSource;
+	using time_point = typename timer_source::time_point;
+	using time_duration = typename time_point::duration;
+
+	action
+	on_connected(const boost::system::error_code &)
+	{
+		connection_time_ = timer_source::now();
+		return action::normal;
+	}
+
+	time_point
+	connection_time() const
+	{
+		return connection_time_;
+	}
+
+	time_duration
+	connection_duration() const
+	{
+		return timer_source::now() - connection_time_;
+	}
+
+private:
+	time_point connection_time_ = timer_source::now();
 };
 
 template <
