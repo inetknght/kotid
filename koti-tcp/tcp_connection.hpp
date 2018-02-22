@@ -6,6 +6,9 @@
 #include <functional>
 #include <stdexcept>
 
+#include <reserve.hpp>
+#include <timestamp.hpp>
+
 namespace koti {
 
 template <class>
@@ -110,7 +113,7 @@ public:
 	}
 
 protected:
-	std::vector<char> read_buffer_;
+	std::vector<char> read_buffer_ = kotipp::reserve(4096);
 	std::size_t completed_read_length_ = 0;
 };
 
@@ -152,41 +155,38 @@ public:
 	}
 
 protected:
-	std::vector<char> write_buffer_;
+	std::vector<char> write_buffer_ = kotipp::reserve(4096);
 	std::size_t completed_write_length_ = 0;
 };
 
-template <class TimerSource = std::chrono::steady_clock>
+template <class TimeSource = std::chrono::steady_clock>
 class connection_timer_handler
-: private TimerSource
+: private kotipp::timestamp<TimeSource>
 {
 public:
 	using action = typename null_connection_handler::action;
-	using timer_source = TimerSource;
-	using time_point = typename timer_source::time_point;
+	using time_source = TimeSource;
+	using time_point = typename time_source::time_point;
 	using time_duration = typename time_point::duration;
 
 	action
 	on_connected(const boost::system::error_code &)
 	{
-		connection_time_ = timer_source::now();
+		kotipp::timestamp<TimeSource>::stamp_now();
 		return action::normal;
 	}
 
 	time_point
 	connection_time() const
 	{
-		return connection_time_;
+		return kotipp::timestamp<TimeSource>::previous();
 	}
 
 	time_duration
 	connection_duration() const
 	{
-		return timer_source::now() - connection_time_;
+		return kotipp::timestamp<TimeSource>::duration_since_stamp();
 	}
-
-private:
-	time_point connection_time_;
 };
 
 template <

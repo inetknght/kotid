@@ -28,18 +28,19 @@ protected:
 };
 
 template <typename T, typename ... Args>
-auto protected_make_shared_enabler(Args && ... args) -> typename T::pointer
+typename T::pointer
+protected_make_shared_enabler(Args && ... args)
 {
-	struct private_make_shared_enabler : public T
+	struct magic : public T
 	{
-		private_make_shared_enabler(Args && ... args)
+		magic(Args && ... args)
 			: T(std::forward<Args>(args)...)
 		{
 		}
 	};
 
 	return std::make_shared<
-		private_make_shared_enabler
+		magic
 	>(
 		std::forward<Args>(args)...
 	);
