@@ -9,4 +9,4 @@
 	url = https://github.com/gabime/spdlog
 [submodule "kotipp"]
 	path = kotipp
-	url = ./kotipp
+	url = ./kotipp/
