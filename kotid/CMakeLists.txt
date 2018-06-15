@@ -8,6 +8,7 @@ ADD_LIBRARY(kotid_lib STATIC ${KOTID_HDR} ${KOTID_SRC} )
 
 TARGET_LINK_LIBRARIES(kotid_lib
 	koti_options_lib
+	koti_exceptions_lib
 	koti_httpd_lib
 	${Boost_LIBRARIES}
 	${ZLIB_LIBRARIES}

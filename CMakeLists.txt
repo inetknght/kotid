@@ -69,8 +69,6 @@ FIND_PACKAGE(Threads)
 ADD_SUBDIRECTORY(thirdparty)
 INCLUDE_DIRECTORIES(SYSTEM ${GTEST_INCLUDE_DIRS})
 
-INCLUDE_DIRECTORIES(SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/beast)
-
 SET(CMAKE_CXX_STANDARD 17)
 SET(CMAKE_CXX_STANDARD_REQUIRED 17)
 SET(CMAKE_CXX_FLAGS " ${CMAKE_CXX_FLAGS} -Wall -Wextra -Werror=return-type -Werror=shift-count-overflow -Werror=shift-negative-value -Werror=shift-overflow -Wno-long-long -pedantic -Wno-unused-function -Wno-vla -march=native -mtune=native")
@@ -86,7 +84,7 @@ INCLUDE_DIRECTORIES(SYSTEM ${BZIP2_INCLUDE_DIRS})
 # kotipp; a support library providing syntactic sugar for C++
 ADD_SUBDIRECTORY(kotipp)
 
-ADD_SUBDIRECTORY(koti-options)
+#ADD_SUBDIRECTORY(koti-options)
 ADD_SUBDIRECTORY(koti-httpd)
 ADD_SUBDIRECTORY(kotid)
 

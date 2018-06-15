@@ -21,10 +21,13 @@ namespace beast = boost::beast;
 
 #include "httpd.hpp"
 #include "options.hpp"
+#include "exceptions/unhandled_value.hpp"
 
 namespace koti {
 
-class application final {
+class application final
+: public options::configurator
+{
 public:
 	class exit_status {
 	public:
@@ -66,18 +69,29 @@ public:
 		int exit_status_ = EXIT_FAILURE;
 	};
 
-protected:
-	options options_;
+	application(
+		options::commandline_arguments options
+	);
 
-public:
-	application(options::commandline_arguments options_ = {}) : options_(options_) {}
+	options::validate
+	add_options(
+		options & storage
+	) override;
+
+	options::validate
+	validate_configuration(
+		options & storage
+	) override;
 
 	exit_status run();
 
-	asio::io_service ios_;
+	// io_context
+	asio::io_context iox_;
 	std::unique_ptr<asio::io_service::work> work_;
 
-//	std::unique_ptr<httpd> http_server_;
+protected:
+	options options_;
+	std::unique_ptr<httpd> http_server_;
 };
 
 } // namespace koti

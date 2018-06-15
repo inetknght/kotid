@@ -10,27 +10,58 @@
 
 namespace koti {
 
-application::exit_status application::run() {
+application::application(
+	options::commandline_arguments options
+)
+: options_(options)
+{
+	options_.add(*this);
+}
 
-//	http_server_ = std::make_unique<httpd>(ios_);
+options::validate
+application::add_options(
+	options & storage
+)
+{
+	if ( ! http_server_ )
+	{
+		throw std::logic_error{"http server does not exist"};
+	}
+	storage.add(http_server_->options());
+	return options::validate::ok;
+}
 
-//	http_server_->add_options(options_);
+options::validate
+application::validate_configuration(
+	options &
+)
+{
+	return options::validate::ok;
+}
 
-//	auto validation = options_.configure();
-//	switch (validation)
-//	{
-//	case options::validate::reject:
-//		return exit_status::failure();
-//	case options::validate::reject_not_failure:
-//		return exit_status::success();
-//	case options::validate::ok:
-//		break;
-//	}
+application::exit_status application::run()
+{
 
-//	http_server_->listen();
+	http_server_ = std::make_unique<httpd>(iox_);
 
-//	work_.reset(new asio::io_service::work(ios_));
-//	ios_.run();
+	auto configured = options_.configure();
+	if ( options::validate::reject == configured )
+	{
+		return exit_status::failure();
+	}
+	if ( options::validate::reject_not_failure == configured )
+	{
+		return exit_status::success();
+	}
+	if ( options::validate::ok != configured )
+	{
+		throw exception::unhandled_value(configured);
+	}
+
+	http_server_->listen();
+
+	work_.reset(new asio::io_service::work(iox_));
+	iox_.run();
 	return exit_status::success();
 }
 

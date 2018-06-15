@@ -9,3 +9,6 @@ CMakeLists.txt.user
 # Temporary files...
 *.swp
 
+# Disabled files
+*.disabled
+

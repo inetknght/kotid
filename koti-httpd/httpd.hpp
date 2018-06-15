@@ -1,200 +1,215 @@
-//#pragma once
+#pragma once
 
-//#include "fmt/ostream.h"
-//#include "spdlog/spdlog.h"
-//namespace spd = spdlog;
+#include "fmt/ostream.h"
+#include "spdlog/spdlog.h"
+namespace spd = spdlog;
 
-//#include <cstddef>
-//#include <cstdint>
-//#include <vector>
+#include <cstddef>
+#include <cstdint>
+#include <numeric>
+#include <vector>
 
-//#include "tcp_plexer.hpp"
+#include <boost/filesystem/path.hpp>
+namespace fs = boost::filesystem;
 
-//namespace koti {
+#include "options.hpp"
 
-//class httpd_logs {
-//protected:
-//	using logging_pointer = std::shared_ptr<spd::logger>;
+#include "net.hpp"
+#include "net_connection.hpp"
+#include "net_listener.hpp"
 
-//	static const std::string_view & logger_name()
-//	{
-//		static const std::string_view
-//		logger_name{"httpd"};
-//		return logger_name;
-//	}
+namespace koti {
 
-//	static logging_pointer & logger()
-//	{
-//		static logging_pointer
-//		logger{spd::stdout_color_mt({
-//				logger_name().begin(),
-//				logger_name().end()
-//			})};
+class httpd_logs {
+protected:
+	using logging_pointer = std::shared_ptr<spd::logger>;
+
+	static const std::string_view & logger_name()
+	{
+		static const std::string_view
+		logger_name{"httpd"};
+		return logger_name;
+	}
+
+	static logging_pointer & logger()
+	{
+		static logging_pointer
+		logger{spd::stdout_color_mt({
+				logger_name().begin(),
+				logger_name().end()
+			})};
 	
-//		return logger;
-//	}
-//};
+		return logger;
+	}
+};
 
-//template <
-//	class socket = tcp::socket,
-//	class acceptor = tcp::acceptor
-//>
-//class httpd_handler
-//{
-//};
+class http_connection
+: protected koti::local_stream::socket
+{
+public:
+	using koti::local_stream::socket::basic_stream_socket;
 
-//template <
-//	class socket = tcp::socket,
-//	class acceptor = tcp::acceptor,
-//	class connection_handler = connection_handler<socket>,
-//	class listener_handler = listener_handler<socket, acceptor>,
-//	class plexer = koti::plexer<socket, acceptor, connection_handler, >
-//>
-//class httpd
-//	: public plexer
-//{
-//public:
-//	using socket_type = socket;
-//	using acceptor_type = acceptor;
-//	using plexer_type = plexer;
+	http_connection(koti::local_stream::socket && s)
+	: koti::local_stream::socket(std::move(s))
+	{
+	}
 
-//	httpd(
-//		asio::io_service & ios
-//	)
-//		: plexer_type(ios)
-//		, ios_(ios)
-//	{
-//	}
+	using koti::local_stream::socket::close;
 
-//	void
-//	add_options(
-//		koti::options & storage
-//	)
-//	{
-//		listener_options_.add_options(storage);
-//	}
+	using koti::local_stream::socket::local_endpoint;
+	using koti::local_stream::socket::remote_endpoint;
+};
 
-//	operator bool() const
-//	{
-//		return false == error();
-//	}
+enum class http_listener_action
+{
+	cancel_and_stop,
+	normal,
+	reject_connection
+};
 
-//	bool
-//	error() const
-//	{
-//		return
-//			(nullptr == listener_) ||
-//			(listener_->last_error().first);
-//	}
+class http_listener
+: protected koti::local_stream::acceptor
+{
+public:
+	using koti::local_stream::acceptor::acceptor;
+};
 
-//	bool
-//	is_running() const
-//	{
-//		return nullptr != listener_.get();
-//	}
+class httpd_options
+: public koti::options::configurator
+{
+public:
+	options::validate
+	add_options(
+		options & storage
+	) override
+	{
+		storage.descriptions().add_options()
+		("--local-path,l", po::value<fs::path>(&socket_path_), "local unix socket path")
+		;
+		return options::validate::ok;
+	}
 
-//	void
-//	listen()
-//	{
-//		if ( (nullptr == listener_) ||
-//			 (listener_->last_error().first) ||
-//			 (false == listener_->listening()) )
-//		{
-//			listener_ = listener::make(
-//				ios_,
-//				tcp::endpoint{listener_options_.build()},
-//				{},
-//				{}
-//			);
-//		}
-	
-//		listener_->set_connection_handler(
-//			std::bind(
-//				&httpd::on_new_connection,
-//				this,
-//				std::placeholders::_1
-//			)
-//		);
-	
-//		listener_->set_error_handler(
-//			std::bind(
-//				&httpd::on_listener_error,
-//				this
-//			)
-//		);
-	
-//		listener_->listen();
-//	}
+	options::validate
+	validate_configuration(
+		options &
+	) override
+	{
+		return options::validate::ok;
+	}
 
-//	bool
-//	listening() const
-//	{
-//		return (listener_) && (listener_->listening());
-//	}
+	fs::path socket_path_;
+	bool is_abstract_ = true;
+};
 
-//	void
-//	set_maximum_connections(size_t new_maximum)
-//	{
-//		// prefer to keep non-null (active) connections
-//		std::sort(std::begin(connections_),std::end(connections_));
-//		connections_.resize(new_maximum);
-//	}
+class httpd
+: protected koti::http_listener
+{
+public:
+	using this_type = httpd;
 
-//	size_t
-//	active_connection_count() const
-//	{
-//		return std::accumulate(
-//			std::begin(connections_),
-//			std::end(connections_),
-//			0u,
-//			[](size_t count, const tcp_connection::pointer & ptr)
-//		{
-//			return count + (bool)ptr;
-//		});
-//	}
+	using protocol = koti::local_stream;
+	using endpoint = typename protocol::endpoint;
+	using socket = typename protocol::socket;
+	using acceptor = typename protocol::acceptor;
 
-//	size_t
-//	maximum_connection_count() const
-//	{
-//		return connections_.size();
-//	}
+	using http_connection_ptr = std::unique_ptr<http_connection>;
 
-//protected:
-//	listener::error_handler_result
-//	on_listener_error()
-//	{
-//		logger_->error(
-//			"listener error\t{}\t{}\t{}",
-//			listener_->get_acceptor().local_endpoint(),
-//			listener_->last_error().second,
-//			listener_->last_error().first.message()
-//		);
-//		return listener::error_handler_result::cancel_and_stop;
-//	}
+	httpd(
+		asio::io_service & iox
+	)
+	: http_listener(iox)
+	{
+	}
 
-//	void
-//	on_new_connection(tcp::socket && socket)
-//	{
-//		tcp_connection::pointer connection = tcp_connection::upgrade(
-//			std::move(socket),
-//			{}
-//		);
-//		logger_->info("{} connected", connection->socket().remote_endpoint().address());
-//	}
+	void
+	listen(
+		const local_stream::endpoint at = local_stream::local_endpoint()
+	)
+	{
+		acceptor::open(local_stream{});
+		acceptor::bind(at);
+		acceptor::listen();
+	}
 
-//	void
-//	on_new_http_connection(tcp_connection & pointer);
+	void
+	set_maximum_connections(size_t new_maximum)
+	{
+		// prefer to keep non-null (active) connections
+		std::sort(std::begin(connections_),std::end(connections_));
+		connections_.resize(new_maximum);
+	}
 
-//	void
-//	on_connection_closed(tcp_connection & pointer);
+	size_t
+	active_connection_count() const
+	{
+		return std::accumulate(
+			std::begin(connections_),
+			std::end(connections_),
+			0u,
+			[](size_t count, const http_connection_ptr & ptr)
+		{
+			return count + (bool)ptr;
+		});
+	}
 
-//	asio::io_service & ios_;
-//	listener::options listener_options_;
+	size_t
+	maximum_connection_count() const
+	{
+		return connections_.size();
+	}
 
-//	std::vector<tcp_connection::pointer> connections_;
+	httpd_options &
+	options()
+	{
+		return options_;
+	}
 
-//	static const std::string_view httpd_logger_name_;
-//	static std::shared_ptr<spd::logger> logger_;
-//};
+protected:
+	http_listener_action
+	on_listener_error(
+		const boost::system::error_code & ec,
+		const std::string_view msg
+	)
+	{
+		logger_->error(
+			"listener error\t{}\t{}\t{}",
+			local_endpoint(),
+			ec,
+			msg
+		);
+		return http_listener_action::cancel_and_stop;
+	}
 
-//} // namespace koti
+	void
+	on_new_connection(local_stream::socket && socket)
+	{
+		http_connection_ptr connection = std::make_unique<http_connection>(
+			std::move(socket)
+		);
+		logger_->info("{} connected", connection->remote_endpoint().path());
+
+		on_new_http_connection(connection);
+	}
+
+	void
+	on_new_http_connection(http_connection_ptr & connection)
+	{
+		connection->close();
+		on_connection_closed(connection);
+	}
+
+	void
+	on_connection_closed(http_connection_ptr & connection)
+	{
+		logger_->info("{} disconnected", connection->remote_endpoint().path());
+	}
+
+protected:
+	httpd_options options_;
+	std::vector<http_connection_ptr> connections_;
+
+	static const std::string_view httpd_logger_name_;
+	static std::shared_ptr<spd::logger> logger_;
+};
+
+} // namespace koti
