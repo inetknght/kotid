@@ -1,3 +1,4 @@
+#pragma once
 
 extern "C" {
 // #include <posix.h>
@@ -24,6 +25,28 @@ namespace beast = boost::beast;
 #include "exceptions/unhandled_value.hpp"
 
 namespace koti {
+
+class httpd_handler final
+: public httpd_logs
+, public httpd<httpd_handler>
+{
+public:
+	void
+	on_connection_closed(
+		koti::http_connection::ptr & connection
+	);
+
+	void
+	on_new_connection(
+		const boost::system::error_code& ec,
+		koti::local_stream::socket && socket
+	);
+
+	void
+	on_new_http_connection(
+		koti::http_connection::ptr & connection
+	);
+};
 
 class application final
 : public options::configurator
@@ -85,13 +108,20 @@ public:
 
 	exit_status run();
 
+	auto &
+	http_server()
+	{
+		return http_server_;
+	}
+
 	// io_context
 	asio::io_context iox_;
 	std::unique_ptr<asio::io_service::work> work_;
 
 protected:
 	options options_;
-	std::unique_ptr<httpd> http_server_;
+	httpd_options httpd_options_;
+	std::unique_ptr<httpd<httpd_handler>> http_server_;
 };
 
 } // namespace koti

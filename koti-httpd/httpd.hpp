@@ -8,6 +8,7 @@ namespace spd = spdlog;
 #include <cstdint>
 #include <numeric>
 #include <vector>
+#include <functional>
 
 #include <boost/filesystem/path.hpp>
 namespace fs = boost::filesystem;
@@ -48,6 +49,7 @@ class http_connection
 {
 public:
 	using koti::local_stream::socket::basic_stream_socket;
+	using ptr = std::unique_ptr<http_connection>;
 
 	http_connection(koti::local_stream::socket && s)
 	: koti::local_stream::socket(std::move(s))
@@ -72,6 +74,7 @@ class http_listener
 {
 public:
 	using koti::local_stream::acceptor::acceptor;
+	using koti::local_stream::acceptor::close;
 };
 
 class httpd_options
@@ -84,7 +87,8 @@ public:
 	) override
 	{
 		storage.descriptions().add_options()
-		("--local-path,l", po::value<fs::path>(&socket_path_), "local unix socket path")
+		("local-path,l", po::value<std::string>(&socket_path_)->required(), "local unix socket path")
+		("abstract", po::bool_switch(&is_abstract_), "when selected, use an abstract socket")
 		;
 		return options::validate::ok;
 	}
@@ -97,10 +101,28 @@ public:
 		return options::validate::ok;
 	}
 
-	fs::path socket_path_;
+	fs::path
+	path()
+	const
+	{
+		if ( is_abstract_ )
+		{
+			if ( socket_path_.empty() || socket_path_.front() != '\0' )
+			{
+				return fs::path{std::string{1u, '\0'} + socket_path_};
+			}
+		}
+
+		return socket_path_;
+	}
+
+	std::string socket_path_;
 	bool is_abstract_ = true;
 };
 
+template <
+	class Handler
+>
 class httpd
 : protected koti::http_listener
 {
@@ -112,7 +134,7 @@ public:
 	using socket = typename protocol::socket;
 	using acceptor = typename protocol::acceptor;
 
-	using http_connection_ptr = std::unique_ptr<http_connection>;
+	using handler = Handler;
 
 	httpd(
 		asio::io_service & iox
@@ -126,10 +148,30 @@ public:
 		const local_stream::endpoint at = local_stream::local_endpoint()
 	)
 	{
+		acceptor::close();
 		acceptor::open(local_stream{});
 		acceptor::bind(at);
 		acceptor::listen();
+
+		acceptor::async_accept(
+			internal_remote_endpoint_,
+			std::bind(
+				&httpd<handler>::internal_on_new_connection,
+				this,
+				std::placeholders::_1,
+				std::placeholders::_2
+		));
 	}
+
+	void
+	listen(
+		const httpd_options &options
+	)
+	{
+		listen({options.path().string()});
+	}
+
+	using http_listener::close;
 
 	void
 	set_maximum_connections(size_t new_maximum)
@@ -146,7 +188,7 @@ public:
 			std::begin(connections_),
 			std::end(connections_),
 			0u,
-			[](size_t count, const http_connection_ptr & ptr)
+			[](size_t count, const http_connection::ptr & ptr)
 		{
 			return count + (bool)ptr;
 		});
@@ -158,55 +200,18 @@ public:
 		return connections_.size();
 	}
 
-	httpd_options &
-	options()
-	{
-		return options_;
-	}
-
 protected:
-	http_listener_action
-	on_listener_error(
-		const boost::system::error_code & ec,
-		const std::string_view msg
+	std::vector<http_connection::ptr> connections_;
+
+	koti::local_stream::endpoint internal_remote_endpoint_;
+	void
+	internal_on_new_connection(
+		const boost::system::error_code& ec,
+		koti::local_stream::socket && socket
 	)
 	{
-		logger_->error(
-			"listener error\t{}\t{}\t{}",
-			local_endpoint(),
-			ec,
-			msg
-		);
-		return http_listener_action::cancel_and_stop;
+		static_cast<handler*>(this)->on_new_connection(ec, std::move(socket));
 	}
-
-	void
-	on_new_connection(local_stream::socket && socket)
-	{
-		http_connection_ptr connection = std::make_unique<http_connection>(
-			std::move(socket)
-		);
-		logger_->info("{} connected", connection->remote_endpoint().path());
-
-		on_new_http_connection(connection);
-	}
-
-	void
-	on_new_http_connection(http_connection_ptr & connection)
-	{
-		connection->close();
-		on_connection_closed(connection);
-	}
-
-	void
-	on_connection_closed(http_connection_ptr & connection)
-	{
-		logger_->info("{} disconnected", connection->remote_endpoint().path());
-	}
-
-protected:
-	httpd_options options_;
-	std::vector<http_connection_ptr> connections_;
 
 	static const std::string_view httpd_logger_name_;
 	static std::shared_ptr<spd::logger> logger_;
