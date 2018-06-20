@@ -15,7 +15,7 @@ httpd_handler::on_connection_closed(
 	http_connection::ptr & connection
 )
 {
-	logger()->info("{} disconnected", connection->remote_endpoint().path());
+	logger()->info("{} disconnected", connection->cached_remote_endpoint().path());
 }
 
 void
@@ -40,7 +40,7 @@ httpd_handler::on_new_connection(
 
 	logger()->info(
 		"{} connected",
-		connection->remote_endpoint().path()
+		connection->cached_remote_endpoint().path()
 	);
 
 	on_new_http_connection(connection);

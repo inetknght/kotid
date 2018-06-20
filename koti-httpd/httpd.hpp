@@ -53,6 +53,7 @@ public:
 
 	http_connection(koti::local_stream::socket && s)
 	: koti::local_stream::socket(std::move(s))
+	, cached_remote_endpoint_{remote_endpoint()}
 	{
 	}
 
@@ -60,6 +61,15 @@ public:
 
 	using koti::local_stream::socket::local_endpoint;
 	using koti::local_stream::socket::remote_endpoint;
+
+	const koti::local_stream::endpoint &
+	cached_remote_endpoint() const
+	{
+		return cached_remote_endpoint_;
+	}
+
+protected:
+	koti::local_stream::endpoint cached_remote_endpoint_;
 };
 
 enum class http_listener_action
