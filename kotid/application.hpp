@@ -26,30 +26,60 @@ namespace beast = boost::beast;
 
 namespace koti {
 
+class http_connection_list
+{
+public:
+	auto & add_connection(
+		http_connection::ptr && ptr
+	)
+	{
+		connections_.push_back(std::move(ptr));
+		return connections_.back();
+	}
+
+protected:
+	std::vector<http_connection::ptr> connections_;
+};
+
 class httpd_handler final
 : public httpd_logs
 , public httpd<httpd_handler>
 {
 public:
+	using httpd::httpd;
+
+	void
+	set_connections(
+		http_connection_list & connections
+	)
+	{
+		connections_ = &connections;
+	}
+
 	void
 	on_connection_closed(
-		koti::http_connection::ptr & connection
+		http_connection::ptr & connection
 	);
 
 	void
 	on_new_connection(
 		const boost::system::error_code& ec,
-		koti::local_stream::socket && socket
+		local_stream::socket && socket
 	);
 
 	void
 	on_new_http_connection(
-		koti::http_connection::ptr & connection
+		http_connection::ptr & connection
 	);
+
+protected:
+	http_connection_list * connections_;
 };
 
 class application final
 : public options::configurator
+, public http_connection_list
+, public httpd_logs
 {
 public:
 	class exit_status {
@@ -121,7 +151,7 @@ public:
 protected:
 	options options_;
 	httpd_options httpd_options_;
-	std::unique_ptr<httpd<httpd_handler>> http_server_;
+	std::unique_ptr<httpd_handler> http_server_;
 };
 
 } // namespace koti

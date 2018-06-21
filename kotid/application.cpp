@@ -8,6 +8,8 @@
 #include <type_traits>
 #include <vector>
 
+#include <boost/beast/http/read.hpp>
+
 namespace koti {
 
 void
@@ -33,10 +35,21 @@ httpd_handler::on_new_connection(
 		return;
 	}
 
-	http_connection::ptr
-	connection = std::make_unique<http_connection>(
-		std::move(socket)
-	);
+	if ( nullptr == connections_ )
+	{
+		logger()->error(
+			"{} connected, but no connections list to put into",
+			socket.remote_endpoint()
+		);
+		socket.close();
+		return;
+	}
+
+	auto & connection =
+	connections_->add_connection(
+		std::make_unique<http_connection>(
+			std::move(socket)
+		));
 
 	logger()->info(
 		"{} connected",
@@ -51,8 +64,7 @@ httpd_handler::on_new_http_connection(
 	http_connection::ptr & connection
 )
 {
-	connection->close();
-	on_connection_closed(connection);
+	connection->async_read();
 }
 
 application::application(
@@ -88,8 +100,9 @@ application::exit_status application::run()
 {
 	work_.reset(new asio::io_service::work(iox_));
 
-	http_server_ = std::make_unique<httpd<httpd_handler>>(iox_);
-
+	http_server_ = std::make_unique<httpd_handler>(iox_);
+	http_server_->set_connections(*this);
+;
 	auto configured = options_.configure();
 	if ( options::validate::reject == configured )
 	{
@@ -107,6 +120,17 @@ application::exit_status application::run()
 	http_server_->listen(httpd_options_);
 
 	iox_.run();
+
+	for ( auto & c : connections_ )
+	{
+		logger()->info(
+			"{} forcing closed",
+			c->cached_remote_endpoint()
+		);
+		c->close();
+		c.reset();
+	}
+
 	return exit_status::success();
 }
 

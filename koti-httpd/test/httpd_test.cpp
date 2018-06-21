@@ -92,14 +92,14 @@ class httpd_tests
 public:
     using httpd = koti::httpd<httpd_test_handler>;
 
+    boost::asio::io_context iox_;
+
     using connection = koti::http_connection;
     void reset()
     {
         ptr_ = std::make_unique<httpd>(iox_);
     }
     std::unique_ptr<httpd> ptr_;
-
-    boost::asio::io_context iox_;
 
     fs::path
     test_socket_path() const

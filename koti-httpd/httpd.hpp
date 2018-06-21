@@ -19,7 +19,11 @@ namespace fs = boost::filesystem;
 #include "net_connection.hpp"
 #include "net_listener.hpp"
 
+#include <boost/beast.hpp>
+
 namespace koti {
+
+namespace http = boost::beast::http;
 
 class httpd_logs {
 protected:
@@ -46,10 +50,23 @@ protected:
 
 class http_connection
 : protected koti::local_stream::socket
+, protected httpd_logs
 {
 public:
 	using koti::local_stream::socket::basic_stream_socket;
 	using ptr = std::unique_ptr<http_connection>;
+
+	const koti::local_stream::socket &
+	socket() const
+	{
+		return *this;
+	}
+
+	koti::local_stream::socket &
+	socket()
+	{
+		return *this;
+	}
 
 	http_connection(koti::local_stream::socket && s)
 	: koti::local_stream::socket(std::move(s))
@@ -68,8 +85,49 @@ public:
 		return cached_remote_endpoint_;
 	}
 
+	void
+	on_http_header(
+		const boost::system::error_code & ec,
+		std::size_t bytes_transferred
+	)
+	{
+		if ( ec )
+		{
+			logger()->error(
+				"{}: {}",
+				cached_remote_endpoint(),
+				ec.message()
+			);
+			return;
+		}
+		logger()->info(
+			"{} {} {}",
+			cached_remote_endpoint(),
+			request_.method(),
+			request_.target()
+		);
+	}
+
+	void
+	async_read()
+	{
+		http::async_read(
+			socket(),
+			buffer_,
+			request_,
+			std::bind(
+				&http_connection::on_http_header,
+				this,
+				std::placeholders::_1,
+				std::placeholders::_2
+			)
+		);
+	}
+
 protected:
 	koti::local_stream::endpoint cached_remote_endpoint_;
+	boost::beast::flat_buffer buffer_;
+	http::request<http::string_body> request_;
 };
 
 enum class http_listener_action
