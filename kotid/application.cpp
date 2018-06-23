@@ -17,7 +17,12 @@ httpd_handler::on_connection_closed(
 	http_connection::ptr & connection
 )
 {
-	logger()->info("{} disconnected", connection->cached_remote_endpoint().path());
+	logger()->info(
+		"UID:{}\tGID:{}\tPID:{}\tdisconnected",
+		connection->cached_remote_identity().uid,
+		connection->cached_remote_identity().gid,
+		connection->cached_remote_identity().pid
+	);
 }
 
 void
@@ -28,7 +33,7 @@ httpd_handler::on_new_connection(
 {
 	if ( ec )
 	{
-		logger()->info(
+		logger()->error(
 			"error\t{}",
 			ec.message()
 		);
@@ -37,9 +42,12 @@ httpd_handler::on_new_connection(
 
 	if ( nullptr == connections_ )
 	{
+		auto remote = local_stream::remote_identity(socket);
 		logger()->error(
-			"{} connected, but no connections list to put into",
-			socket.remote_endpoint()
+			"UID:{}\tGID:{}\tPID:{}\tconnected, but no connections list to put into",
+			remote.uid,
+			remote.gid,
+			remote.pid
 		);
 		socket.close();
 		return;
@@ -52,8 +60,10 @@ httpd_handler::on_new_connection(
 		));
 
 	logger()->info(
-		"{} connected",
-		connection->cached_remote_endpoint().path()
+		"UID:{}\tGID:{}\tPID:{}\tconnected",
+		connection->cached_remote_identity().uid,
+		connection->cached_remote_identity().gid,
+		connection->cached_remote_identity().pid
 	);
 
 	on_new_http_connection(connection);
@@ -124,8 +134,10 @@ application::exit_status application::run()
 	for ( auto & c : connections_ )
 	{
 		logger()->info(
-			"{} forcing closed",
-			c->cached_remote_endpoint()
+			"UID:{}\tGID:{}\tPID:{}\tforcing closed",
+			c->cached_remote_identity().uid,
+			c->cached_remote_identity().gid,
+			c->cached_remote_identity().pid
 		);
 		c->close();
 		c.reset();

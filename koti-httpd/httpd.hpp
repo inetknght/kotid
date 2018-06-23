@@ -70,7 +70,7 @@ public:
 
 	http_connection(koti::local_stream::socket && s)
 	: koti::local_stream::socket(std::move(s))
-	, cached_remote_endpoint_{remote_endpoint()}
+	, cached_remote_identity_{local_stream::remote_identity(*this)}
 	{
 	}
 
@@ -79,10 +79,10 @@ public:
 	using koti::local_stream::socket::local_endpoint;
 	using koti::local_stream::socket::remote_endpoint;
 
-	const koti::local_stream::endpoint &
-	cached_remote_endpoint() const
+	const koti::local_stream::ucred &
+	cached_remote_identity() const
 	{
-		return cached_remote_endpoint_;
+		return cached_remote_identity_;
 	}
 
 	void
@@ -94,15 +94,19 @@ public:
 		if ( ec )
 		{
 			logger()->error(
-				"{}: {}",
-				cached_remote_endpoint(),
+				"UID:{}\tGID:{}\tPID:{}\terror: {}",
+				cached_remote_identity().uid,
+				cached_remote_identity().gid,
+				cached_remote_identity().pid,
 				ec.message()
 			);
 			return;
 		}
 		logger()->info(
-			"{} {} {}",
-			cached_remote_endpoint(),
+			"UID:{}\tGID:{}\tPID:{}\t{}\t{}",
+			cached_remote_identity().uid,
+			cached_remote_identity().gid,
+			cached_remote_identity().pid,
 			request_.method(),
 			request_.target()
 		);
@@ -125,7 +129,7 @@ public:
 	}
 
 protected:
-	koti::local_stream::endpoint cached_remote_endpoint_;
+	local_stream::ucred cached_remote_identity_;
 	boost::beast::flat_buffer buffer_;
 	http::request<http::string_body> request_;
 };
