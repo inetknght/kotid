@@ -245,36 +245,7 @@ public:
 
 	using http_listener::close;
 
-	void
-	set_maximum_connections(size_t new_maximum)
-	{
-		// prefer to keep non-null (active) connections
-		std::sort(std::begin(connections_),std::end(connections_));
-		connections_.resize(new_maximum);
-	}
-
-	size_t
-	active_connection_count() const
-	{
-		return std::accumulate(
-			std::begin(connections_),
-			std::end(connections_),
-			0u,
-			[](size_t count, const http_connection::ptr & ptr)
-		{
-			return count + (bool)ptr;
-		});
-	}
-
-	size_t
-	maximum_connection_count() const
-	{
-		return connections_.size();
-	}
-
 protected:
-	std::vector<http_connection::ptr> connections_;
-
 	koti::local_stream::endpoint internal_remote_endpoint_;
 	void
 	internal_on_new_connection(

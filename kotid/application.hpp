@@ -33,8 +33,48 @@ public:
 		http_connection::ptr && ptr
 	)
 	{
-		connections_.push_back(std::move(ptr));
-		return connections_.back();
+		auto at = std::find_if(
+			connections_.begin(),
+			connections_.end(),
+			[&](const auto & ptr)
+		{
+			return ! ptr;
+		});
+		if ( connections_.end() == at )
+		{
+			throw std::runtime_error{"too many connections"};
+		}
+		(*at) = std::move(ptr);
+		return *at;
+	}
+
+	void
+	set_maximum_connections(
+		size_t new_maximum
+	)
+	{
+		// prefer to keep non-null (active) connections
+		std::sort(std::begin(connections_),std::end(connections_));
+		connections_.resize(new_maximum);
+	}
+
+	size_t
+	active_connection_count() const
+	{
+		return std::accumulate(
+			std::begin(connections_),
+			std::end(connections_),
+			0u,
+			[](size_t count, const http_connection::ptr & ptr)
+		{
+			return count + (bool)ptr;
+		});
+	}
+
+	size_t
+	maximum_connection_count() const
+	{
+		return connections_.size();
 	}
 
 protected:
@@ -149,6 +189,7 @@ public:
 	std::unique_ptr<asio::io_service::work> work_;
 
 protected:
+	std::size_t maximum_connection_count_ = 1;
 	options options_;
 	httpd_options httpd_options_;
 	std::unique_ptr<httpd_handler> http_server_;

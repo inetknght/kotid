@@ -53,20 +53,47 @@ httpd_handler::on_new_connection(
 		return;
 	}
 
-	auto & connection =
-	connections_->add_connection(
-		std::make_unique<http_connection>(
-			std::move(socket)
-		));
+	std::unique_ptr<http_connection> new_connection;
+	try
+	{
+		new_connection = 
+			std::make_unique<http_connection>(
+				std::move(socket)
+			);
 
-	logger()->info(
-		"UID:{}\tGID:{}\tPID:{}\tconnected",
-		connection->cached_remote_identity().uid,
-		connection->cached_remote_identity().gid,
-		connection->cached_remote_identity().pid
-	);
+		auto & connection =
+		connections_->add_connection(std::move(new_connection));
 
-	on_new_http_connection(connection);
+		logger()->info(
+			"UID:{}\tGID:{}\tPID:{}\tconnected",
+			connection->cached_remote_identity().uid,
+			connection->cached_remote_identity().gid,
+			connection->cached_remote_identity().pid
+		);
+
+		on_new_http_connection(connection);
+	}
+	catch (const std::exception & e)
+	{
+		if ( new_connection )
+		{
+			logger()->error(
+				"UID:{}\tGID:{}\tPID:{}\terror:\t{}",
+				new_connection->cached_remote_identity().uid,
+				new_connection->cached_remote_identity().gid,
+				new_connection->cached_remote_identity().pid,
+				e.what()
+			);
+		}
+		else
+		{
+			logger()->error(
+				"{}\terror: failed to construct http connection:\t{}",
+				acceptor::local_endpoint().path(),
+				e.what()
+			);
+		}
+	}
 }
 
 void
@@ -95,6 +122,11 @@ application::add_options(
 		throw std::logic_error{"http server does not exist"};
 	}
 	storage.add(httpd_options_);
+
+	storage.descriptions().add_options()
+	("maximum-connection-count,m", po::value<decltype(maximum_connection_count_)>(&maximum_connection_count_),"maximum number of connections to accept; additional connections will be rejected")
+	;
+
 	return options::validate::ok;
 }
 
@@ -112,7 +144,8 @@ application::exit_status application::run()
 
 	http_server_ = std::make_unique<httpd_handler>(iox_);
 	http_server_->set_connections(*this);
-;
+	set_maximum_connections(maximum_connection_count_);
+
 	auto configured = options_.configure();
 	if ( options::validate::reject == configured )
 	{
