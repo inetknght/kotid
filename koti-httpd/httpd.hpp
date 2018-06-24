@@ -29,14 +29,18 @@ class httpd_logs {
 protected:
 	using logging_pointer = std::shared_ptr<spd::logger>;
 
-	static const std::string_view & logger_name()
+	static
+	const std::string_view &
+	logger_name()
 	{
 		static const std::string_view
 		logger_name{"httpd"};
 		return logger_name;
 	}
 
-	static logging_pointer & logger()
+	static
+	logging_pointer &
+	logger()
 	{
 		static logging_pointer
 		logger{spd::stdout_color_mt({
@@ -48,6 +52,87 @@ protected:
 	}
 };
 
+class http_connection;
+class http_endpoint
+{
+public:
+	virtual
+	http::response<http::string_body>
+	handle(
+		http_connection & connection,
+		http::request<http::string_body> & request
+	) = 0;
+};
+
+class http_verb_endpoint
+: public http_endpoint
+{
+public:
+	virtual
+	http::verb
+	type(
+	) = 0;
+};
+
+class http_path_endpoint
+: public http_endpoint
+{
+public:
+	virtual
+	std::string_view
+	path(
+	) = 0;
+};
+
+class http_path_endpoints
+: public http_path_endpoint
+{
+public:
+	virtual
+	std::string_view
+	path(
+	) override;
+
+	http::response<http::string_body>
+	handle(
+		http_connection & connection,
+		http::request<http::string_body> & request
+	) override;
+
+	using paths_type = std::vector<http_path_endpoint*>;
+
+	paths_type &
+	paths(
+	)
+	{
+		return paths_;
+	}
+
+	const paths_type &
+	paths(
+	) const
+	{
+		return paths_;
+	}
+
+protected:
+	paths_type paths_;
+};
+
+class http_endpoints
+: public http_endpoint
+{
+public:
+	http::response<http::string_body>
+	handle(
+		http_connection & connection,
+		http::request<http::string_body> & request
+	) override;
+
+protected:
+	std::vector<http_path_endpoint*> paths_;
+};
+
 class http_connection
 : protected koti::local_stream::socket
 , protected httpd_logs
@@ -55,6 +140,12 @@ class http_connection
 public:
 	using koti::local_stream::socket::basic_stream_socket;
 	using ptr = std::unique_ptr<http_connection>;
+
+	void
+	set_root_endpoint(http_endpoint * root)
+	{
+		root_ = root;
+	}
 
 	const koti::local_stream::socket &
 	socket() const
@@ -76,6 +167,20 @@ public:
 
 	using koti::local_stream::socket::close;
 
+	void
+	close(
+	)
+	{
+		this->koti::local_stream::socket::close();
+
+		logger()->debug(
+			"UID:{}\tGID:{}\tPID:{}\tclosed",
+			cached_remote_identity().uid,
+			cached_remote_identity().gid,
+			cached_remote_identity().pid
+		);
+	}
+
 	using koti::local_stream::socket::local_endpoint;
 	using koti::local_stream::socket::remote_endpoint;
 
@@ -83,6 +188,35 @@ public:
 	cached_remote_identity() const
 	{
 		return cached_remote_identity_;
+	}
+
+	void
+	on_response_written(
+		const boost::system::error_code & ec,
+		std::size_t // bytes_transferred
+	)
+	{
+		if ( ec )
+		{
+			logger()->error(
+				"UID:{}\tGID:{}\tPID:{}\t{}\t{}",
+				cached_remote_identity().uid,
+				cached_remote_identity().gid,
+				cached_remote_identity().pid,
+				ec.message()
+			);
+		}
+
+		if ( false == response_.keep_alive() )
+		{
+			logger()->info(
+				"UID:{}\tGID:{}\tPID:{}\tkeep_alive: false",
+				cached_remote_identity().uid,
+				cached_remote_identity().gid,
+				cached_remote_identity().pid
+			);
+			this->close();
+		}
 	}
 
 	void
@@ -102,7 +236,7 @@ public:
 			);
 			return;
 		}
-		logger()->info(
+		logger()->debug(
 			"UID:{}\tGID:{}\tPID:{}\t{}\t{}",
 			cached_remote_identity().uid,
 			cached_remote_identity().gid,
@@ -110,6 +244,54 @@ public:
 			request_.method(),
 			request_.target()
 		);
+
+		try
+		{
+			if ( root_ )
+			{
+				response_ = root_->handle(*this, request_);
+			}
+			else
+			{
+				response_ = {};
+				response_.version(11);
+				response_.result(http::status::internal_server_error);
+				response_.set(http::field::comments, "no-root-endpoint-installed");
+				response_.keep_alive(false);
+			}
+
+			if ( response_.result() == http::status::connection_closed_without_response )
+			{
+				this->http_connection::close();
+				return;
+			}
+
+			logger()->info(
+				"UID:{}\tGID:{}\tPID:{}\t{}\t{}\t{}\t{}",
+				cached_remote_identity().uid,
+				cached_remote_identity().gid,
+				cached_remote_identity().pid,
+				static_cast<int>(response_.result()),
+				response_.result(),
+				request_.method(),
+				request_.target()
+			);
+
+			http::async_write(
+				socket(),
+				response_,
+				std::bind(
+					&http_connection::on_response_written,
+					this,
+					std::placeholders::_1,
+					std::placeholders::_2
+				)
+			);
+		}
+		catch (...)
+		{
+			
+		}
 	}
 
 	void
@@ -132,6 +314,8 @@ protected:
 	local_stream::ucred cached_remote_identity_;
 	boost::beast::flat_buffer buffer_;
 	http::request<http::string_body> request_;
+	http::response<http::string_body> response_;
+	http_endpoint * root_ = nullptr;
 };
 
 enum class http_listener_action

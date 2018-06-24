@@ -83,24 +83,70 @@ TEST_F(application_test, local_path) {
     int native = ::socket(AF_LOCAL, SOCK_STREAM, 0);
     ASSERT_LE(0, native);
 
-    int result = ::fcntl(native, F_SETFD, O_NONBLOCK);
+    int result = ::fcntl(native, F_SETFL, O_NONBLOCK);
     ASSERT_LE(0, result);
     result = -1;
 
     fs::path test_socket_path = koti::test::test_socket_path();
 
     auto until = std::chrono::system_clock::now() + std::chrono::seconds(1);
+    auto check_timeout = [&](const std::string_view & msg)
+    {
+        if ( until <= std::chrono::system_clock::now() )
+        {
+            throw koti::exception::timeout{std::string{msg}};
+        }
+    };
 
     std::vector<char>
         native_readbuf, native_writebuf;
     native_readbuf.resize(4096);
     native_writebuf.reserve(4096);
 
-    int total_write = 0;
+    int
+        total_write = 0,
+        total_read = 0;
+
+    std::function<void()> do_check = [&]()
+    {
+        app_->iox_.stop();
+    };
 
     std::function<void()> do_read = [&]()
     {
-        app_->iox_.stop();
+        if ( native_readbuf.size() < static_cast<std::size_t>(total_read) )
+        {
+            throw std::runtime_error{"youdidmorebad"};
+        }
+        if ( native_readbuf.size() == static_cast<std::size_t>(total_read) )
+        {
+            asio::post(app_->iox_, do_check);
+            return;
+        }
+        result = ::read(native, native_readbuf.data() + total_read, native_readbuf.size() - total_read);
+        if ( result < 0 )
+        {
+            int e = errno;
+            switch (e)
+            {
+            case EAGAIN: [[fallthrough]];
+            case EINTR:
+                break;
+            default:
+                throw std::runtime_error{std::string{"unhandled result from ::read(): "} + strerror(e)};
+            }
+            check_timeout(std::string{"timed out trying to read from "} + test_socket_path.string());
+        }
+        else if ( result == 0 )
+        {
+            EXPECT_NE(result, 0);
+            app_->iox_.stop();
+        }
+        else
+        {
+            total_read += result;
+        }
+        asio::post(app_->iox_, do_read);
     };
 
     std::function<void()> do_write = [&]()
@@ -132,14 +178,11 @@ TEST_F(application_test, local_path) {
             {
             case EAGAIN: [[fallthrough]];
             case EINTR:
-                if ( until <= std::chrono::system_clock::now() )
-                {
-                    throw koti::exception::timeout{std::string{"timed out trying to write to "} + test_socket_path.string()};
-                }
                 break;
             default:
                 throw std::runtime_error{std::string{"unhandled result from ::write(): "} + strerror(e)};
             }
+            check_timeout(std::string{"timed out trying to write to "} + test_socket_path.string());
         }
         else
         {
@@ -178,10 +221,7 @@ TEST_F(application_test, local_path) {
             default:
                 throw std::runtime_error{std::string{"unhandled error from ::connect(): "} + strerror(e)};
             }
-            if ( until <= std::chrono::system_clock::now() )
-            {
-                throw koti::exception::timeout{std::string{"timed out trying to connect to "} + test_socket_path.string()};
-            }
+            check_timeout(std::string{"timed out trying to connect to "} + test_socket_path.string());
             asio::post(app_->iox_, do_connect);
         }
         else
