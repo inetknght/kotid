@@ -69,7 +69,7 @@ public:
 		args_raw_.push_back(nullptr);
 	}
 
-	std::shared_ptr<koti::application> app_;
+	std::unique_ptr<koti::application> app_;
 	std::vector<std::string> args_;
 	std::vector<const char*> args_raw_;
 };
@@ -80,8 +80,18 @@ TEST_F(application_test, no_parameters) {
 }
 
 TEST_F(application_test, local_path) {
+    std::unique_ptr<int, std::function<int(int*)>> native_(new int, [](int*fd)
+    {
+        auto result = 0 <= *fd ? ::close(*fd) : 0;
+        delete fd;
+        return result;
+    });
+    *native_ = -1;
+
     int native = ::socket(AF_LOCAL, SOCK_STREAM, 0);
     ASSERT_LE(0, native);
+
+    *native_ = native;
 
     int result = ::fcntl(native, F_SETFL, O_NONBLOCK);
     ASSERT_LE(0, result);
@@ -98,6 +108,8 @@ TEST_F(application_test, local_path) {
         }
     };
 
+    auto post = [&](auto f){asio::post(app_->iox_, f);};
+
     std::vector<char>
         native_readbuf, native_writebuf;
     native_readbuf.resize(4096);
@@ -105,7 +117,8 @@ TEST_F(application_test, local_path) {
 
     int
         total_write = 0,
-        total_read = 0;
+        total_read = 0,
+        read_processed = 0;
 
     std::function<void()> do_check = [&]()
     {
@@ -120,11 +133,16 @@ TEST_F(application_test, local_path) {
         }
         if ( native_readbuf.size() == static_cast<std::size_t>(total_read) )
         {
-            asio::post(app_->iox_, do_check);
+            post(do_check);
             return;
         }
         result = ::read(native, native_readbuf.data() + total_read, native_readbuf.size() - total_read);
-        if ( result < 0 )
+        if ( result == 0 )
+        {
+            post(do_check);
+            return;
+        }
+        else if ( result < 0 )
         {
             int e = errno;
             switch (e)
@@ -137,16 +155,33 @@ TEST_F(application_test, local_path) {
             }
             check_timeout(std::string{"timed out trying to read from "} + test_socket_path.string());
         }
-        else if ( result == 0 )
-        {
-            EXPECT_NE(result, 0);
-            app_->iox_.stop();
-        }
         else
         {
             total_read += result;
+
+            if ( read_processed < total_read )
+            {
+                if ( read_processed < 4 )
+                {
+                    if ( total_read < 5 )
+                    {
+                        post(do_read);
+                        return;
+                    }
+                    auto v = static_cast<std::size_t>(std::min(5, total_read));
+                    auto data = std::string_view{native_readbuf.data(), v};
+                    if ( data != "HTTP/" )
+                    {
+                        SCOPED_TRACE("httpd returned non-HTTP response");
+                        EXPECT_EQ(data[4], ' ');
+                        app_->iox_.stop();
+                        return;
+                    }
+                    read_processed = 5;
+                }
+            }
         }
-        asio::post(app_->iox_, do_read);
+        post(do_read);
     };
 
     std::function<void()> do_write = [&]()
@@ -163,7 +198,7 @@ TEST_F(application_test, local_path) {
         }
         if ( native_writebuf.size() == static_cast<std::size_t>(total_write) )
         {
-            asio::post(app_->iox_, do_read);
+            post(do_read);
             return;
         }
         if ( 0 < total_write )
@@ -188,7 +223,7 @@ TEST_F(application_test, local_path) {
         {
             total_write += result;
         }
-        asio::post(app_->iox_, do_write);
+        post(do_write);
     };
 
     std::function<void()> do_connect = [&]()
@@ -222,16 +257,16 @@ TEST_F(application_test, local_path) {
                 throw std::runtime_error{std::string{"unhandled error from ::connect(): "} + strerror(e)};
             }
             check_timeout(std::string{"timed out trying to connect to "} + test_socket_path.string());
-            asio::post(app_->iox_, do_connect);
+            post(do_connect);
         }
         else
         {
-            asio::post(app_->iox_, do_write);
+            post(do_write);
         }
     };
     auto inject = [&]()
     {
-        asio::post(app_->iox_, do_connect);
+        post(do_connect);
     };
 
     configure();
