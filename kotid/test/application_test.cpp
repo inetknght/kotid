@@ -117,11 +117,68 @@ TEST_F(application_test, local_path) {
 
     int
         total_write = 0,
-        total_read = 0,
-        read_processed = 0;
+        total_read = 0;
 
     std::function<void()> do_check = [&]()
     {
+        // encompass data into string-like instead of silly vector
+        native_readbuf.resize(total_read);
+        auto data = std::string_view{
+            native_readbuf.data(),
+            static_cast<std::size_t>(total_read)
+        };
+
+        // check header is reasonable
+        {
+            auto expected = std::string_view{"HTTP/1.1 "};
+            auto v = std::min(expected.size(), 9ul);
+            auto check = std::string_view{data.data(), v};
+            if ( check != expected )
+            {
+                SCOPED_TRACE("httpd returned non-HTTP response");
+                EXPECT_EQ(check, expected);
+                app_->iox_.stop();
+                return;
+            }
+        }
+
+        std::stringstream s{std::string{data}};
+        namespace http = boost::beast::http;
+        boost::beast::flat_buffer b;
+        http::response<http::string_body> response;
+        http::response_parser<http::string_body> parser;
+        boost::system::error_code ec;
+        parser.eager(true);
+        auto count = parser.put(boost::asio::buffer(native_readbuf), ec);
+        EXPECT_TRUE(! ec);
+        if ( ec )
+        {
+            SCOPED_TRACE(ec.message());
+            EXPECT_TRUE(! ec);
+            app_->iox_.stop();
+            return;
+        }
+        EXPECT_EQ(native_readbuf.size(), count);
+        EXPECT_TRUE(parser.is_header_done());
+        if ( ! parser.is_header_done() )
+        {
+            app_->iox_.stop();
+            return;
+        }
+
+        http::response<http::string_body> & message = parser.get();
+        EXPECT_FALSE(message.chunked());
+        EXPECT_FALSE(message.has_content_length());
+        EXPECT_FALSE(message.keep_alive());
+        ASSERT_EQ(static_cast<bool>(message.payload_size()), true);
+        EXPECT_EQ(*message.payload_size(), 0);
+
+        auto header = message.base();
+        EXPECT_EQ(11, header.version());
+        EXPECT_EQ(http::status::internal_server_error, header.result());
+        EXPECT_EQ(header.find(http::field::server), header.end());
+        EXPECT_NE(header.find(http::field::comments), header.end());
+        EXPECT_EQ(header[http::field::comments], "no-root-endpoint-installed");
         app_->iox_.stop();
     };
 
@@ -136,6 +193,7 @@ TEST_F(application_test, local_path) {
             post(do_check);
             return;
         }
+        errno = 0;
         result = ::read(native, native_readbuf.data() + total_read, native_readbuf.size() - total_read);
         if ( result == 0 )
         {
@@ -158,28 +216,6 @@ TEST_F(application_test, local_path) {
         else
         {
             total_read += result;
-
-            if ( read_processed < total_read )
-            {
-                if ( read_processed < 4 )
-                {
-                    if ( total_read < 5 )
-                    {
-                        post(do_read);
-                        return;
-                    }
-                    auto v = static_cast<std::size_t>(std::min(5, total_read));
-                    auto data = std::string_view{native_readbuf.data(), v};
-                    if ( data != "HTTP/" )
-                    {
-                        SCOPED_TRACE("httpd returned non-HTTP response");
-                        EXPECT_EQ(data[4], ' ');
-                        app_->iox_.stop();
-                        return;
-                    }
-                    read_processed = 5;
-                }
-            }
         }
         post(do_read);
     };
@@ -205,6 +241,7 @@ TEST_F(application_test, local_path) {
         {
             native_writebuf.erase(native_writebuf.begin(), native_writebuf.begin() + total_write);
         }
+        errno = 0;
         result = ::write(native, native_writebuf.data(), native_writebuf.size());
         if ( result < 0 )
         {
@@ -244,6 +281,7 @@ TEST_F(application_test, local_path) {
             local_addr.sun_path[test_socket_path.size()] = '\0';
         }
 
+        errno = 0;
         result = ::connect(native, &local_addr_base, sizeof(local_addr));
         if ( result < 0 )
         {
