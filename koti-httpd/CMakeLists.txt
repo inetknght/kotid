@@ -6,7 +6,7 @@ ADD_LIBRARY(koti_httpd_lib STATIC ${KOTI_HTTPD_HDR} ${KOTI_HTTPD_SRC} )
 
 TARGET_LINK_LIBRARIES(koti_httpd_lib
 	koti_options_lib
-	koti_tcp_lib
+	koti_net_lib
 	${Boost_LIBRARIES}
 )
 

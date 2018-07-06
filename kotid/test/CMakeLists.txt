@@ -7,8 +7,8 @@ ADD_EXECUTABLE(kotid_test ${KOTID_TEST_SRC} ${KOTID_TEST_HDR})
 
 TARGET_LINK_LIBRARIES(kotid_test
 	kotid_lib
+	koti_test_support_lib
 	gtest_main
 )
 
 GTEST_ADD_TESTS(kotid_test "" ${KOTID_TEST_SRC})
-
